@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 from cog import BasePredictor, Input
-from transformers import AutoTokenizer, AutoModelForCausalLM, StaticCache
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from pruna import SmashConfig, smash
 
 
@@ -109,6 +109,7 @@ class Predictor(BasePredictor):
                     temperature=temperature,
                     top_p=top_p,
                     do_sample=True,
+                    generator=generator,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
                     use_cache=True,
