@@ -30,12 +30,12 @@ class Predictor(BasePredictor):
         base_model = AutoModelForCausalLM.from_pretrained(
             model_path,
             torch_dtype=torch.bfloat16,
-            device_map="cuda",  # Use device_map instead of manual .to()
+            device_map="cuda",
         )
 
         print("Loading text generation model pipeline")
 
-        # Configure smashing with more explicit settings
+        # Configure smashing
         smash_config = SmashConfig()
         smash_config["quantizer"] = "hqq"
         smash_config["compiler"] = "torch_compile"
@@ -48,8 +48,7 @@ class Predictor(BasePredictor):
             smash_config=smash_config,
         )
         
-        # Initialize cache with proper size to avoid reinitialization warnings
-        # Adjust cache_length based on your typical max_new_tokens + prompt length
+        # Cache length setup
         self.cache_length = 2048
         
         print("Setup complete.")
@@ -79,7 +78,7 @@ class Predictor(BasePredictor):
             description="Seed for reproducibility", 
             default=-1
         ),
-    ) -> Path:
+    ) -> str:
         """Run a single prediction on the text generation model."""
 
         # Set seed for reproducibility
@@ -90,7 +89,7 @@ class Predictor(BasePredictor):
         else:
             generator = None
 
-        # Tokenize input with proper attention mask
+        # Tokenize input
         inputs = self.tokenizer(
             prompt, 
             return_tensors="pt", 
@@ -99,29 +98,20 @@ class Predictor(BasePredictor):
             max_length=self.cache_length - max_new_tokens
         ).to("cuda")
 
-        # Generate with cleaner parameters (remove unhandled kwargs)
+        # Generate with minimal compatible kwargs
         with torch.no_grad():
             try:
-                output_ids = self.smashed_text_model.generate(
-                    input_ids=inputs["input_ids"],
-                    attention_mask=inputs["attention_mask"],
-                    max_new_tokens=max_new_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    do_sample=True,
-                    generator=generator,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id,
-                    use_cache=True,
-                )
-            except Exception as e:
-                print(f"Generation failed: {e}")
-                # Fallback without some parameters if needed
                 output_ids = self.smashed_text_model.generate(
                     inputs["input_ids"],
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
-                    do_sample=True,
+                )
+            except Exception as e:
+                print(f"Generation failed: {e}")
+                output_ids = self.smashed_text_model.generate(
+                    inputs["input_ids"],
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
                 )
 
         # Decode only the newly generated tokens
@@ -130,10 +120,11 @@ class Predictor(BasePredictor):
             skip_special_tokens=True
         )
         
-        # Combine with original prompt for full output
+        # Combine with original prompt
         full_output = prompt + generated_text
+        print(full_output)
 
-        # Create output directory and save the text
+        # Save to disk
         output_dir = Path(tempfile.mkdtemp())
         text_path = save_text(
             output_folder=output_dir,
@@ -142,4 +133,5 @@ class Predictor(BasePredictor):
             text=full_output,
         )
 
-        return text_path
+        # Return as string for JSON serialization compatibility
+        return str(text_path)
