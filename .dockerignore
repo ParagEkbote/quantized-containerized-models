@@ -1,0 +1,56 @@
+# Ignore Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+ENV/
+.venv/
+*.env
+
+# Ignore Jupyter notebooks checkpoints
+.ipynb_checkpoints
+
+# Ignore local data, logs, outputs
+*.log
+*.out
+*.err
+output/
+outputs/
+data/
+datasets/
+checkpoints/
+runs/
+
+# Ignore Git and VSCode settings
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+
+# Ignore Docker-related files not needed in image
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+
+# Ignore temporary files
+*.bak
+*.tmp
+*.swp
+*.swo
+*.DS_Store
+
+# Ignore build and distribution directories
+build/
+dist/
+*.egg-info/
+
+# Ignore node modules if present
+node_modules/
+
+# Ignore system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
