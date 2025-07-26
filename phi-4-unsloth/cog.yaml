@@ -1,0 +1,17 @@
+build:
+  cog_runtime: true
+  gpu: true
+  cuda: "12.1"
+  python_version: "3.11"
+  system_packages:
+    - libgl1-mesa-glx
+    - libglib2.0-0
+    - git
+    - build-essential
+  python_requirements: requirements.txt
+  run:
+    - command: apt-get clean && rm -rf /var/lib/apt/lists/*
+    - command: apt-get update --fix-missing || apt-get update --fix-missing || apt-get update
+    - command: export CC=/usr/bin/gcc
+
+predict: "predict.py:Predictor"
