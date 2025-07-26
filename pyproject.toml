@@ -1,0 +1,29 @@
+[project]
+name = "containerized-models"
+version = "0.1.0"
+description = "Dockerized version of models optimized with Pruna,TorchAo and containerized with Cog."
+authors = [
+    { name="Parag Ekbote", email="paragekbote23@gmail.com" }
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "diffusers>=0.30.0"
+    "pruna>=0.1.1",
+    "cog>=0.7.2",
+    "pillow",   
+    "IPython",
+    "colorama"               
+]
+
+[build-system]
+requires = ["setuptools>=67.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["smollm"]  # replace with your actual module name
+include-package-data = true
