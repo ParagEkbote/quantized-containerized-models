@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 from cog import BasePredictor, Input
-from diffusers import StableDiffusionPipeline
+from diffusers import SanaPipeline
 from pruna import SmashConfig, smash
 
 
@@ -22,16 +22,17 @@ class Predictor(BasePredictor):
         print("Loading text-to-image generation model pipeline")
 
         # Load base Stable Diffusion pipeline
-        base_pipeline = StableDiffusionPipeline.from_pretrained(
+        base_pipeline = SanaPipeline.from_pretrained(
             model_path,
             torch_dtype=torch.float16,
-            use_safetensors=True,
-        ).to("cuda")
+            device_map="cuda",
+        )
 
         # Configure smashing with more explicit settings
         smash_config = SmashConfig()
-        smash_config["quantizer"] = "hqq"
-        smash_config["compiler"] = "torch_compile"
+        smash_config["quantizer"] = "hqq_diffusers"
+        smash_config["factorizer"] = "qkv_diffusers"
+        smash_config["cacher"] = "deepcache"
         smash_config._prepare_saving = False
 
         # Smash the pipeline and store it
@@ -62,6 +63,33 @@ class Predictor(BasePredictor):
             ge=1,
             le=100,
         ),
+        negative_prompt: str = Input(
+            description="What to avoid in the image (e.g., 'blurry, dark, low quality')",
+            default="",
+        ),
+        width: int = Input(
+            description="Width of the generated image (in pixels)",
+            default=512,
+            ge=128,
+            le=2048,
+        ),
+        height: int = Input(
+            description="Height of the generated image (in pixels)",
+            default=512,
+            ge=128,
+            le=2048,
+        ),
+        num_images: int = Input(
+            description="How many images to generate from the same prompt",
+            default=1,
+            ge=1,
+            le=4,
+        ),
+        output_format: str = Input(
+            description="Choose image output type",
+            default="pil",
+            choices=["pil", "np_array"],
+        ),
     ) -> Path:
         """Run a single prediction on the text-to-image model."""
 
@@ -78,6 +106,11 @@ class Predictor(BasePredictor):
                 guidance_scale=guidance_scale,
                 num_inference_steps=num_inference_steps,
                 generator=generator,
+                negative_prompt=negative_prompt,
+                width=width,
+                height=height,
+                num_images=num_images,
+                output_format=output_format
             ).images[0]
 
         # Create output directory and save the image
