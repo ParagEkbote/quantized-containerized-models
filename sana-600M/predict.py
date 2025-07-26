@@ -1,125 +1,106 @@
 import tempfile
 from pathlib import Path
+import logging
 
 import torch
 from cog import BasePredictor, Input
 from diffusers import SanaPipeline
 from pruna import SmashConfig, smash
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger(__name__)
 
-def save_image(output_folder: Path, seed: int, index: int | str, image) -> Path:
-    """Save the generated image to disk as a .png file."""
-    output_path = output_folder / f"output_{seed!s}_{index}.png"
-    image.save(output_path)
-    return Path(output_path)
+
+class ImageSaver:
+    """Utility class to handle saving images."""
+
+    def __init__(self, output_dir: Path | None = None):
+        self.output_dir = output_dir or Path(tempfile.mkdtemp())
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"ImageSaver initialized at directory: {self.output_dir}")
+
+    def save(self, image, seed: int, index: int | str) -> Path:
+        output_path = self.output_dir / f"output_{seed!s}_{index}.png"
+        image.save(output_path)
+        logger.info(f"Image saved to: {output_path}")
+        return output_path
+
+
+class SmashedPipelineLoader:
+    """Handles loading and smashing the pipeline."""
+
+    def __init__(self, model_path: str):
+        self.model_path = model_path
+        model_path = "Efficient-Large-Model/Sana_600M_512px"
+
+    def load_pipeline(self):
+        logger.info("Loading Sana pipeline...")
+        pipeline = SanaPipeline.from_pretrained(
+            self.model_path,
+            torch_dtype=torch.float16,
+            variant="fp16",
+            device_map="balanced",
+        )
+        logger.debug("Sana pipeline loaded.")
+        return pipeline
+
+    def smash_pipeline(self, pipeline):
+        logger.info("Applying Pruna smashing optimizations...")
+        smash_config = SmashConfig()
+        smash_config["quantizer"] = "torchao"
+        smash_config._prepare_saving = False
+
+        smashed_pipeline = smash(pipeline, smash_config)
+        logger.info("Pipeline successfully smashed.")
+        return smashed_pipeline
 
 
 class Predictor(BasePredictor):
     def setup(self) -> None:
-        """Load the text-to-image generation model into memory."""
-        model_path = "Efficient-Large-Model/Sana_600M_512px"
-
-        print("Loading text-to-image generation model pipeline")
-
-        # Load base Stable Diffusion pipeline
-        base_pipeline = SanaPipeline.from_pretrained(
-            model_path,
-            torch_dtype=torch.float16,
-            device_map="cuda",
-        )
-
-        # Configure smashing with more explicit settings
-        smash_config = SmashConfig()
-        smash_config["quantizer"] = "hqq_diffusers"
-        smash_config["factorizer"] = "qkv_diffusers"
-        smash_config["cacher"] = "deepcache"
-        smash_config._prepare_saving = False
-
-        # Smash the pipeline and store it
-        print("Smashing text-to-image model...")
-        self.smashed_image_pipeline = smash(
-            model=base_pipeline,
-            smash_config=smash_config,
-        )
-
-        print("Setup complete.")
+        logger.info("Setting up the ImageGenerationPredictor...")
+        model_path = "Efficient-Large-Model/Sana_600M_512px_diffusers"
+        loader = SmashedPipelineLoader(model_path)
+        base_pipeline = loader.load_pipeline()
+        self.pipeline = loader.smash_pipeline(base_pipeline)
+        logger.info("Predictor setup complete.")
 
     def predict(
         self,
         prompt: str = Input(description="Prompt for image generation"),
-        seed: int = Input(
-            description="Seed for reproducibility",
-            default=-1
-        ),
-        guidance_scale: float = Input(
-            description="Classifier-free guidance scale",
-            default=7.5,
-            ge=1.0,
-            le=20.0,
-        ),
-        num_inference_steps: int = Input(
-            description="Number of denoising steps",
-            default=25,
-            ge=1,
-            le=100,
-        ),
-        negative_prompt: str = Input(
-            description="What to avoid in the image (e.g., 'blurry, dark, low quality')",
-            default="",
-        ),
-        width: int = Input(
-            description="Width of the generated image (in pixels)",
-            default=512,
-            ge=128,
-            le=2048,
-        ),
-        height: int = Input(
-            description="Height of the generated image (in pixels)",
-            default=512,
-            ge=128,
-            le=2048,
-        ),
-        num_images: int = Input(
-            description="How many images to generate from the same prompt",
-            default=1,
-            ge=1,
-            le=4,
-        ),
-        output_format: str = Input(
-            description="Choose image output type",
-            default="pil",
-            choices=["pil", "np_array"],
-        ),
+        negative_prompt: str = Input(description="Things to avoid", default=""),
+        seed: int = Input(description="Seed for reproducibility", default=-1),
+        guidance_scale: float = Input(description="Guidance scale", default=7.5, ge=1.0, le=20.0),
+        num_inference_steps: int = Input(description="Denoising steps", default=25, ge=1, le=100),
+        width: int = Input(description="Image width (px)", default=512, ge=128, le=2048),
+        height: int = Input(description="Image height (px)", default=512, ge=128, le=2048),
+        num_images: int = Input(description="Number of images", default=1, ge=1, le=4),
+        output_format: str = Input(description="Output format", default="pil", choices=["pil", "np_array"]),
     ) -> Path:
-        """Run a single prediction on the text-to-image model."""
+        logger.info(f"Generating image for prompt: '{prompt}'")
 
-        # Set seed for reproducibility
-        if seed != -1:
-            generator = torch.Generator("cuda").manual_seed(seed)
-        else:
-            generator = None
+        generator = torch.Generator("cuda").manual_seed(seed) if seed != -1 else None
 
-        # Generate image
-        with torch.no_grad():
-            image = self.smashed_image_pipeline(
-                prompt=prompt,
-                guidance_scale=guidance_scale,
-                num_inference_steps=num_inference_steps,
-                generator=generator,
-                negative_prompt=negative_prompt,
-                width=width,
-                height=height,
-                num_images=num_images,
-                output_format=output_format
-            ).images[0]
+        try:
+            with torch.no_grad():
+                result = self.pipeline(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    guidance_scale=guidance_scale,
+                    num_inference_steps=num_inference_steps,
+                    width=width,
+                    height=height,
+                    num_images=num_images,
+                    generator=generator,
+                    output_format=output_format
+                )
+            logger.info("Image generation successful.")
+        except Exception as e:
+            logger.error(f"Image generation failed: {e}")
+            raise
 
-        # Create output directory and save the image
-        output_dir = Path(tempfile.mkdtemp())
-        image_path = save_image(
-            output_folder=output_dir,
-            seed=seed if seed != -1 else 0,
-            index=0,
-            image=image,
-        )
-
-        return image_path
+        image = result.images[0]
+        saver = ImageSaver()
+        return saver.save(image, seed if seed != -1 else 0, index=0)
