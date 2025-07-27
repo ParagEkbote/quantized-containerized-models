@@ -1,17 +1,16 @@
 build:
   cog_runtime: true
   gpu: true
-  cuda: "12.1"
-  python_version: "3.11"
+  cuda: "12.4"
+  python_version: "3.10"
   system_packages:
-    - libgl1-mesa-glx
-    - libglib2.0-0
-    - git
-    - build-essential
-  python_requirements: requirements.txt
+    - "git"
+    - "cmake"
+    - "ninja-build"
   run:
-    - command: apt-get clean && rm -rf /var/lib/apt/lists/*
-    - command: apt-get update --fix-missing || apt-get update --fix-missing || apt-get update
-    - command: export CC=/usr/bin/gcc
-
+  - command: apt-get update && apt-get install -y git
+  - command: apt-get clean && rm -rf /var/lib/apt/lists/*
+  - command: pip install packaging wheel ninja cmake torch
+  - command: pip install -U flash-attn --no-build-isolation
+  - command: pip install transformers==4.54.0 accelerate==1.9.0 unsloth==2025.7.8 unsloth_zoo==2025.7.10
 predict: "predict.py:Predictor"

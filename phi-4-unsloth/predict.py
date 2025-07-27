@@ -1,7 +1,8 @@
+from unsloth import FastLanguageModel
 import torch
 from cog import BasePredictor, Input
 from transformers import AutoTokenizer
-from unsloth import FastLanguageModel
+
 
 class Predictor(BasePredictor):
     def setup(self):
@@ -19,5 +20,15 @@ class Predictor(BasePredictor):
     def predict(self, prompt: str = Input(description="Input prompt")) -> str:
         inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
         with torch.no_grad():
-            output = self.model.generate(**inputs, max_new_tokens=256)
-        return self.tokenizer.decode(output[0], skip_special_tokens=True)
+            output = self.model.generate(**inputs, max_new_tokens=512,do_sample=True,
+            temperature=0.7,
+            top_p=0.95,
+            eos_token_id=self.tokenizer.eos_token_id,
+            pad_token_id=self.tokenizer.pad_token_id,)
+        result = self.tokenizer.decode(output[0], skip_special_tokens=True)
+
+        print(f"\n[Prompt]: {prompt}")
+        print(f"[Generated Output]: {result}\n")
+        print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+        return result
+
