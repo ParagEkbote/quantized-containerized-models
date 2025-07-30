@@ -1,0 +1,16 @@
+build:
+  cog_runtime: true
+  gpu: true
+  cuda: "12.4"
+  python_version: "3.10"
+  system_packages:
+    - "git"
+    - "cmake"
+    - "ninja-build"
+  run:
+    - command: apt-get update && apt-get install -y git
+    - command: apt-get clean && rm -rf /var/lib/apt/lists/*
+    - command: pip install packaging wheel ninja cmake torch
+    - command: pip install -U flash-attn --no-build-isolation
+    - command: pip install pillow transformers==4.54.0 accelerate==1.9.0 diffusers==0.34.0
+predict: "predict.py:Predictor"
