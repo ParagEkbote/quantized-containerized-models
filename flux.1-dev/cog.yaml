@@ -1,7 +1,7 @@
 build:
   cog_runtime: true
   gpu: true
-  cuda: "12.4"
+  cuda: "12.1"
   python_version: "3.10"
   system_packages:
     - "git"
@@ -9,5 +9,16 @@ build:
   run:
     - command: apt-get update && apt-get install -y git
     - command: apt-get clean && rm -rf /var/lib/apt/lists/*
-    - command: pip install pillow>=11.3.0 transformers>=4.52.0 accelerate>=1.8.0 diffusers>=0.33.0 bitsandbytes>=0.45.0 python-dotenv==1.1.1 huggingface_hub
+    - command: pip install \
+        "pillow>=11.3.0" \
+        "transformers>=4.52.0" \
+        "accelerate>=1.8.0" \
+        "diffusers>=0.33.0" \
+        "bitsandbytes>=0.45.0" \
+        "python-dotenv==1.1.1" \
+        "huggingface-hub[hf-xet]" \
+        "peft>=0.15.0" \
+        "sentencepiece>=0.1.95" \
+        "protobuf>=3.20.0"
+
 predict: "predict.py:Predictor"

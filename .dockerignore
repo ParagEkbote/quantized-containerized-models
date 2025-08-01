@@ -1,15 +1,7 @@
-# Ignore Python cache and virtual environments
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-env/
-venv/
-ENV/
-.venv/
-*.env
+
 
 # Ignore Jupyter notebooks checkpoints
+
 .ipynb_checkpoints
 
 # Ignore local data, logs, outputs

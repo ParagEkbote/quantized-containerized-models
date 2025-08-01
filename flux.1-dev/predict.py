@@ -10,14 +10,12 @@ import os
 from dotenv import load_dotenv
 from huggingface_hub import login
 
-# Step 1: Load token from .env
-load_dotenv()
-hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
-
-# Step 2: Login to HF
-if hf_token is None:
-    raise ValueError("HUGGINGFACE_HUB_TOKEN is not set in the .env file.")
-login(token=hf_token)
+load_dotenv()  # Loads HF_TOKEN from .env file
+hf_token = os.getenv("HF_TOKEN")
+if hf_token:
+    login(token=hf_token)  # Explicitly pass token to avoid interactive prompt
+else:
+    raise ValueError("HF_TOKEN not found in .env file")
 
 
 def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
@@ -34,20 +32,28 @@ class Predictor(BasePredictor):
             quantization_config=PipelineQuantizationConfig(
             quant_backend="bitsandbytes_4bit",
             quant_kwargs={"load_in_4bit": True, "bnb_4bit_quant_type": "nf4", "bnb_4bit_compute_dtype": torch.bfloat16},
-            components_to_quantize=["transformer", "text_encoder_2"],
+            components_to_quantize=["transformer"],
         )).to("cuda")
 
         self.pipe.enable_lora_hotswap(target_rank=8)
 
-        # Load default adapter
+        # Load both adapters initially (no hotswap for first load)
         self.pipe.load_lora_weights(
             "data-is-better-together/open-image-preferences-v1-flux-dev-lora",
             weight_name="pytorch_lora_weights.safetensors",
-            adapter_name="open-image-preferences",
-            hotswap=True
+            adapter_name="open-image-preferences"
+            # No hotswap=True here - this is the first load
         )
 
-        self.second_lora_loaded = False
+        self.pipe.load_lora_weights(
+            "aleksa-codes/flux-ghibsky-illustration",
+            weight_name="lora_v2.safetensors", 
+            adapter_name="flux-ghibsky"
+            # No hotswap=True here either - this is also first load
+        )
+
+        # Track which adapter is currently active
+        self.current_adapter = "open-image-preferences"
 
         self.lora1_triggers = [
             "Cinematic", "Photographic", "Anime", "Manga", "Digital art",
@@ -56,30 +62,23 @@ class Predictor(BasePredictor):
         ]
         self.lora2_triggers = ["GHIBSKY"]
 
+        # Set initial adapter
+        self.pipe.set_adapters(["open-image-preferences"], adapter_weights=[1.0])
+
     def predict(
         self,
         prompt: str = Input(description="The text prompt to generate the image from."),
         trigger_word: str = Input(description="Style keyword that triggers a specific LoRA.")
     ) -> Path:
 
-        # Adapter switching
-        if trigger_word in self.lora2_triggers and not self.second_lora_loaded:
-            self.pipe.load_lora_weights(
-                "aleksa-codes/flux-ghibsky-illustration",
-                weight_name="lora_v2.safetensors",
-                adapter_name="flux-ghibsky",
-                hotswap=True
-            )
-            self.second_lora_loaded = True
-
-        elif trigger_word in self.lora1_triggers and self.second_lora_loaded:
-            self.pipe.load_lora_weights(
-                "data-is-better-together/open-image-preferences-v1-flux-dev-lora",
-                weight_name="pytorch_lora_weights.safetensors",
-                adapter_name="open-image-preferences",
-                hotswap=True
-            )
-            self.second_lora_loaded = False
+        # Switch adapters based on trigger word
+        if trigger_word in self.lora2_triggers and self.current_adapter != "flux-ghibsky":
+            self.pipe.set_adapters(["flux-ghibsky"], adapter_weights=[0.8])
+            self.current_adapter = "flux-ghibsky"
+            
+        elif trigger_word in self.lora1_triggers and self.current_adapter != "open-image-preferences":
+            self.pipe.set_adapters(["open-image-preferences"], adapter_weights=[1.0])
+            self.current_adapter = "open-image-preferences"
 
         pipe_kwargs = {
             "prompt": prompt,
