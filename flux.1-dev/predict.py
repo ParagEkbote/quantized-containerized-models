@@ -2,9 +2,10 @@ import uuid
 from pathlib import Path
 
 from cog import BasePredictor, Input
-from diffusers import DiffusionPipeline, PipelineQuantizationConfig
+from diffusers import DiffusionPipeline, TorchAoConfig
+from diffusers.quantizers import PipelineQuantizationConfig
 from PIL import Image
-from torchao.quantization import TorchAoConfig
+import torch
 
 
 def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
@@ -19,9 +20,10 @@ class Predictor(BasePredictor):
             "black-forest-labs/FLUX.1-dev",
             torch_dtype=torch.bfloat16,
             quantization_config=PipelineQuantizationConfig(
-                quant_mapping={"transformer": TorchAoConfig("float8dq_e4m3_row")}
-            )
-        ).to("cuda")
+            quant_backend="bitsandbytes_4bit",
+            quant_kwargs={"load_in_4bit": True, "bnb_4bit_quant_type": "nf4", "bnb_4bit_compute_dtype": torch.bfloat16},
+            components_to_quantize=["transformer", "text_encoder_2"],
+        )).to("cuda")
 
         self.pipe.enable_lora_hotswap(target_rank=8)
 
