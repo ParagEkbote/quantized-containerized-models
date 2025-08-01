@@ -2,10 +2,22 @@ import uuid
 from pathlib import Path
 
 from cog import BasePredictor, Input
-from diffusers import DiffusionPipeline, TorchAoConfig
+from diffusers import DiffusionPipeline
 from diffusers.quantizers import PipelineQuantizationConfig
 from PIL import Image
 import torch
+import os
+from dotenv import load_dotenv
+from huggingface_hub import login
+
+# Step 1: Load token from .env
+load_dotenv()
+hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
+
+# Step 2: Login to HF
+if hf_token is None:
+    raise ValueError("HUGGINGFACE_HUB_TOKEN is not set in the .env file.")
+login(token=hf_token)
 
 
 def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
