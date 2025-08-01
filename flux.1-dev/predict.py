@@ -62,8 +62,6 @@ class Predictor(BasePredictor):
         ]
         self.lora2_triggers = ["GHIBSKY"]
 
-        # Set initial adapter
-        self.pipe.set_adapters(["open-image-preferences"], adapter_weights=[1.0])
 
     def predict(
         self,
@@ -80,6 +78,12 @@ class Predictor(BasePredictor):
             self.pipe.set_adapters(["open-image-preferences"], adapter_weights=[1.0])
             self.current_adapter = "open-image-preferences"
 
+        self.pipe.text_encoder = torch.compile(self.pipe.text_encoder, fullgraph=True, mode="max-autotune")
+
+        self.pipe.text_encoder_2 = torch.compile(self.pipe.text_encoder_2, fullgraph=True, mode="max-autotune")
+
+        self.pipe.vae = torch.compile(self.pipe.vae, fullgraph=True, mode="max-autotune")
+
         pipe_kwargs = {
             "prompt": prompt,
             "height": 1024,
@@ -90,4 +94,6 @@ class Predictor(BasePredictor):
         }
 
         image = self.pipe(**pipe_kwargs).images[0]
+        print(f"\n[Prompt]: {prompt} | [Trigger Word]: {trigger_word}")
+        print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
         return save_image(image)
