@@ -91,6 +91,7 @@ class Predictor(BasePredictor):
                     inputs["input_ids"],
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
+                    generator=generator,
                 )
             except Exception as e:
                 print(f"Generation failed: {e}")
@@ -98,6 +99,7 @@ class Predictor(BasePredictor):
                     inputs["input_ids"],
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
+                    generator=generator,
                 )
 
         # Decode only the newly generated tokens
