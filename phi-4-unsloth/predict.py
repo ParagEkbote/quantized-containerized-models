@@ -1,7 +1,8 @@
+from unsloth import FastLanguageModel
 import torch
 from cog import BasePredictor, Input
 from transformers import AutoTokenizer
-from unsloth import FastLanguageModel
+
 
 
 class Predictor(BasePredictor):
