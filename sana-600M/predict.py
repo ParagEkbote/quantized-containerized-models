@@ -1,5 +1,5 @@
-import tempfile
 import logging
+import tempfile
 from pathlib import Path
 
 import torch
@@ -8,14 +8,12 @@ from diffusers import SanaPipeline
 from pruna import SmashConfig, smash
 
 # --- Setup Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
 # --- Utility Classes ---
+
 
 class ImageSaver:
     """Utility class to handle saving images."""
@@ -62,11 +60,13 @@ class SmashedPipelineLoader:
 
 # --- Main Predictor Class ---
 
+
 class Predictor(BasePredictor):
     """
     The main predictor class for Cog.
     It sets up the model and defines the prediction logic.
     """
+
     def setup(self) -> None:
         """Initializes the model and pipeline."""
         logger.info("Setting up the ImageGenerationPredictor...")
@@ -85,17 +85,22 @@ class Predictor(BasePredictor):
             description="Guidance scale (higher values mean stricter prompt adherence)",
             default=7.5,
             ge=1.0,
-            le=20.0
+            le=20.0,
         ),
-        num_inference_steps: int = Input(description="Number of denoising steps", default=25, ge=1, le=100),
+        num_inference_steps: int = Input(
+            description="Number of denoising steps", default=25, ge=1, le=100
+        ),
         width: int = Input(description="Image width in pixels", default=512, ge=128, le=2048),
         height: int = Input(description="Image height in pixels", default=512, ge=128, le=2048),
         num_images: int = Input(description="Number of images to generate", default=1, ge=1, le=4),
-        output_format: str = Input(description="Output format for the generated image", default="pil", choices=["pil", "np_array"]),
+        output_format: str = Input(
+            description="Output format for the generated image",
+            default="pil",
+            choices=["pil", "np_array"],
+        ),
     ) -> Path:
         """Runs a single prediction on the model."""
         logger.info(f"Generating image for prompt: '{prompt}'")
-
 
         # Set up the random seed generator for reproducibility
         generator = torch.Generator("cuda").manual_seed(seed) if seed != -1 else None

@@ -18,4 +18,5 @@ dependencies = [
     "colorama",
     "unsloth",
     "unsloth_zoo",
+    "pre-commit"
 ]

@@ -3,8 +3,8 @@ from pathlib import Path
 
 import torch
 from cog import BasePredictor, Input
-from transformers import AutoTokenizer, AutoModelForCausalLM
 from pruna import SmashConfig, smash
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def save_text(output_folder: Path, seed: int, index: int | str, text: str) -> Path:
@@ -22,7 +22,7 @@ class Predictor(BasePredictor):
 
         # Load tokenizer and model
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        
+
         # Add padding token if missing
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -47,37 +47,23 @@ class Predictor(BasePredictor):
             model=base_model,
             smash_config=smash_config,
         )
-        
+
         # Cache length setup
         self.cache_length = 2048
-        
+
         print("Setup complete.")
 
     def predict(
         self,
         prompt: str = Input(description="Prompt for text generation"),
         max_new_tokens: int = Input(
-            description="Maximum number of new tokens to generate", 
-            default=128,
-            ge=1,
-            le=1024
+            description="Maximum number of new tokens to generate", default=128, ge=1, le=1024
         ),
         temperature: float = Input(
-            description="Sampling temperature", 
-            default=1.0,
-            ge=0.1,
-            le=2.0
+            description="Sampling temperature", default=1.0, ge=0.1, le=2.0
         ),
-        top_p: float = Input(
-            description="Top-p (nucleus) sampling", 
-            default=0.95,
-            ge=0.1,
-            le=1.0
-        ),
-        seed: int = Input(
-            description="Seed for reproducibility", 
-            default=-1
-        ),
+        top_p: float = Input(description="Top-p (nucleus) sampling", default=0.95, ge=0.1, le=1.0),
+        seed: int = Input(description="Seed for reproducibility", default=-1),
     ) -> str:
         """Run a single prediction on the text generation model."""
 
@@ -91,11 +77,11 @@ class Predictor(BasePredictor):
 
         # Tokenize input
         inputs = self.tokenizer(
-            prompt, 
-            return_tensors="pt", 
+            prompt,
+            return_tensors="pt",
             padding=True,
             truncation=True,
-            max_length=self.cache_length - max_new_tokens
+            max_length=self.cache_length - max_new_tokens,
         ).to("cuda")
 
         # Generate with minimal compatible kwargs
@@ -116,10 +102,9 @@ class Predictor(BasePredictor):
 
         # Decode only the newly generated tokens
         generated_text = self.tokenizer.decode(
-            output_ids[0][inputs["input_ids"].shape[1]:], 
-            skip_special_tokens=True
+            output_ids[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
         )
-        
+
         # Combine with original prompt
         full_output = prompt + generated_text
         print(full_output)
