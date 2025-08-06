@@ -1,8 +1,9 @@
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import torch
-from cog import BasePredictor, Input
+from cog import BasePredictor, Input, Path
 from pruna import SmashConfig, smash
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -64,7 +65,7 @@ class Predictor(BasePredictor):
         ),
         top_p: float = Input(description="Top-p (nucleus) sampling", default=0.95, ge=0.1, le=1.0),
         seed: int = Input(description="Seed for reproducibility", default=-1),
-    ) -> str:
+    ) -> Path:
         """Run a single prediction on the text generation model."""
 
         # Set seed for reproducibility
@@ -91,6 +92,7 @@ class Predictor(BasePredictor):
                     inputs["input_ids"],
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
+                    top_p= top_p,
                     generator=generator,
                 )
             except Exception as e:
@@ -99,6 +101,7 @@ class Predictor(BasePredictor):
                     inputs["input_ids"],
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
+                    top_p= top_p,
                     generator=generator,
                 )
 
@@ -121,4 +124,4 @@ class Predictor(BasePredictor):
         )
 
         # Return as string for JSON serialization compatibility
-        return str(text_path)
+        return Path(text_path)
