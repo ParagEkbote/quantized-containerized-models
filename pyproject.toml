@@ -12,13 +12,13 @@ dependencies = [
     "transformers>=4.36.0",
     "diffusers>=0.30.0",
     "pruna>=0.1.1",
-    "cog>=0.7.2",
     "pillow",
     "IPython",
     "colorama",
     "unsloth",
     "unsloth_zoo",
-    "pre-commit"
+    "pre-commit",
+    "pytest"
 ]
 
 [tool.black]
