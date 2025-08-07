@@ -96,14 +96,14 @@ class Predictor(BasePredictor):
             self.current_adapter = "open-image-preferences"
 
         self.pipe.text_encoder = torch.compile(
-            self.pipe.text_encoder, fullgraph=True, mode="max-autotune"
+            self.pipe.text_encoder, fullgraph=False, mode="reduce-overhead"
         )
 
         self.pipe.text_encoder_2 = torch.compile(
-            self.pipe.text_encoder_2, fullgraph=True, mode="max-autotune"
+            self.pipe.text_encoder_2, fullgraph=False, mode="reduce-overhead"
         )
 
-        self.pipe.vae = torch.compile(self.pipe.vae, fullgraph=True, mode="max-autotune")
+        self.pipe.vae = torch.compile(self.pipe.vae, fullgraph=False, mode="reduce-overhead")
 
         pipe_kwargs = {
             "prompt": prompt,
