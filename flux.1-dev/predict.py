@@ -114,6 +114,7 @@ class Predictor(BasePredictor):
             "max_sequence_length": 512,
         }
 
+    with torch.no_grad():
         image = self.pipe(**pipe_kwargs).images[0]
         print(f"\n[Prompt]: {prompt} | [Trigger Word]: {trigger_word}")
         print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
