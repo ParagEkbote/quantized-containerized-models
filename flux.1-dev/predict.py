@@ -43,37 +43,25 @@ class Predictor(BasePredictor):
 
         self.pipe.enable_lora_hotswap(target_rank=8)
 
-        # Load both adapters initially (no hotswap for first load)
+        # Load both adapters initially
         self.pipe.load_lora_weights(
             "data-is-better-together/open-image-preferences-v1-flux-dev-lora",
             weight_name="pytorch_lora_weights.safetensors",
             adapter_name="open-image-preferences",
-            # No hotswap=True here - this is the first load
         )
 
         self.pipe.load_lora_weights(
             "aleksa-codes/flux-ghibsky-illustration",
             weight_name="lora_v2.safetensors",
             adapter_name="flux-ghibsky",
-            # No hotswap=True here either - this is also first load
         )
 
-        # Track which adapter is currently active
         self.current_adapter = "open-image-preferences"
 
         self.lora1_triggers = [
-            "Cinematic",
-            "Photographic",
-            "Anime",
-            "Manga",
-            "Digital art",
-            "Pixel art",
-            "Fantasy art",
-            "Neonpunk",
-            "3D Model",
-            "Painting",
-            "Animation",
-            "Illustration",
+            "Cinematic", "Photographic", "Anime", "Manga", "Digital art",
+            "Pixel art", "Fantasy art", "Neonpunk", "3D Model",
+            "Painting", "Animation", "Illustration",
         ]
         self.lora2_triggers = ["GHIBSKY"]
 
@@ -95,15 +83,16 @@ class Predictor(BasePredictor):
             self.pipe.set_adapters(["open-image-preferences"], adapter_weights=[1.0])
             self.current_adapter = "open-image-preferences"
 
+        # Compile only once if needed — here assumed every time
         self.pipe.text_encoder = torch.compile(
             self.pipe.text_encoder, fullgraph=False, mode="reduce-overhead"
         )
-
         self.pipe.text_encoder_2 = torch.compile(
             self.pipe.text_encoder_2, fullgraph=False, mode="reduce-overhead"
         )
-
-        self.pipe.vae = torch.compile(self.pipe.vae, fullgraph=False, mode="reduce-overhead")
+        self.pipe.vae = torch.compile(
+            self.pipe.vae, fullgraph=False, mode="reduce-overhead"
+        )
 
         pipe_kwargs = {
             "prompt": prompt,
@@ -114,8 +103,8 @@ class Predictor(BasePredictor):
             "max_sequence_length": 512,
         }
 
-    with torch.no_grad():
-        image = self.pipe(**pipe_kwargs).images[0]
-        print(f"\n[Prompt]: {prompt} | [Trigger Word]: {trigger_word}")
-        print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
-        return save_image(image)
+        with torch.no_grad():
+            image = self.pipe(**pipe_kwargs).images[0]
+            print(f"\n[Prompt]: {prompt} | [Trigger Word]: {trigger_word}")
+            print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+            return save_image(image)
