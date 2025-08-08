@@ -43,7 +43,7 @@ class Predictor(BasePredictor):
 
         self.pipe.enable_lora_hotswap(target_rank=8)
 
-        # Load both adapters initially
+        # Load both adapters initially(no hotswap for first load)
         self.pipe.load_lora_weights(
             "data-is-better-together/open-image-preferences-v1-flux-dev-lora",
             weight_name="pytorch_lora_weights.safetensors",
@@ -53,7 +53,7 @@ class Predictor(BasePredictor):
         self.pipe.load_lora_weights(
             "aleksa-codes/flux-ghibsky-illustration",
             weight_name="lora_v2.safetensors",
-            adapter_name="flux-ghibsky",
+            adapter_name="flux-ghibsky",        # No hotswap=True here either - this is also first load
         )
 
         self.current_adapter = "open-image-preferences"
