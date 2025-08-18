@@ -84,11 +84,8 @@ class Predictor(BasePredictor):
             self.current_adapter = "open-image-preferences"
 
         # Compile only once if needed — here assumed every time
-        self.pipe.text_encoder = torch.compile(
-            self.pipe.text_encoder, fullgraph=False, mode="reduce-overhead"
-        )
-        self.pipe.text_encoder_2 = torch.compile(
-            self.pipe.text_encoder_2, fullgraph=False, mode="reduce-overhead"
+        self.pipe.transformer = torch.compile(
+            self.pipe.transformer, fullgraph=False, mode="reduce-overhead"
         )
         self.pipe.vae = torch.compile(
             self.pipe.vae, fullgraph=False, mode="reduce-overhead"
