@@ -87,6 +87,11 @@ class Predictor(BasePredictor):
         device = next(self.smashed_text_model.parameters()).device
         inputs = {k: v.to(device) for k, v in inputs.items()}
 
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+            torch.cuda.empty_cache()
+        
         # Generate
         with torch.no_grad():
                 output_ids = self.smashed_text_model.generate(
@@ -106,9 +111,10 @@ class Predictor(BasePredictor):
         print(full_output)
 
         if torch.cuda.is_available():
-            used_mb = torch.cuda.memory_allocated() / (1024 ** 2)
-            reserved_mb = torch.cuda.memory_reserved() / (1024 ** 2)
-            print(f"[VRAM] Allocated: {used_mb:.2f} MB | Reserved: {reserved_mb:.2f} MB")
+            allocated = torch.cuda.memory_allocated() / (1024 ** 2)
+            reserved = torch.cuda.memory_reserved() / (1024 ** 2)
+            peak = torch.cuda.max_memory_allocated() / 1024**2
+            print(f"[VRAM] Allocated: {allocated:.2f} MB | Reserved: {reserved:.2f} MB | Peak: {peak:.2f} MB")
 
 
         # Save to disk
