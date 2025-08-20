@@ -1,21 +1,18 @@
 build:
   cog_runtime: true
   gpu: true
-  cuda: "12.4"
+  cuda: "12.1"
   system_packages:
     - "libgl1-mesa-glx"
     - "libglib2.0-0"
     - "git"
     - "build-essential"
-  python_version: "3.11"
+  python_version: "3.10"
   run:
     # Clear apt cache and update with retries
     - command: apt-get clean && rm -rf /var/lib/apt/lists/*
     - command: apt-get update --fix-missing || apt-get update --fix-missing || apt-get update
     # Install pip packages with retries and specific index
-    - command: pip install --no-cache-dir --retries 3 --timeout 30 pruna==0.2.8
-    - command: pip install --no-cache-dir --retries 3 --timeout 30 colorama
-    - command: pip install --no-cache-dir --retries 3 --timeout 30 IPython
-    - command: pip install --upgrade --retries 3 --timeout 30 transformers
+    - command: pip install --no-cache-dir --retries 3 --timeout 30 pruna==0.2.8 colorama IPython && pip install --no-cache-dir --retries 3 --timeout 30 --upgrade transformers
     - command: export CC=/usr/bin/gcc
 predict: "predict.py:Predictor"
