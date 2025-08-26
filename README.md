@@ -4,9 +4,8 @@
 
 ## Features
 
-- **Quantization**: Showcases techniques for reducing model size and speeding up inference via quantization.
-- **Containerization**: Provides Docker-based solutions for packaging and deploying machine learning models.
-- **Python-based**: The project uses Python for model handling and deployment scripts.
+- **Quantization**: Showcases techniques for reducing model size and speeding up inference.
+- **Containerization**: Uses [Cog](https://cog.run/), a Docker-based solution for packaging and deploying AI models.
 - **Open Source**: Licensed under the Apache License 2.0.
 
 ## Active Deployements
