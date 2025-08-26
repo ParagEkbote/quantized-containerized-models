@@ -9,14 +9,11 @@
 - **Python-based**: The project uses Python for model handling and deployment scripts.
 - **Open Source**: Licensed under the Apache License 2.0.
 
-## Getting Started
+## Active Deployements
 
-### Prerequisites
+- [flux-fast-lora-hotswap](https://replicate.com/paragekbote/flux-fast-lora-hotswap): Based on the following [blog post](https://huggingface.co/blog/lora-fast), the project features the flux.1-dev models with 2 LoRAs which are hot-swapped to reduce generation time and graph breaks. We also quantize the transformer module to nf4 and torch_compile modules for further speed-ups. The code for the same is present [here](https://github.com/ParagEkbote/quantized-containerized-models/tree/58e64c6e652b2f82f10cab42f25c4093a1252974/flux.1-dev).
 
-- Python 3.x
-- Docker
-
-
+- [smollm3-3b-smashed](https://replicate.com/paragekbote/smollm3-3b-smashed): This project uses Pruna to quantize and torch_compile the smollm3-3b model for faster generation and lower VRAM usage. This allows us to having a higher output context window of 16k tokens and hybrid reasoning capabilites. The code for the same is present [here](https://github.com/ParagEkbote/quantized-containerized-models/tree/58e64c6e652b2f82f10cab42f25c4093a1252974/smollm).
 
 ## License
 
