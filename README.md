@@ -20,5 +20,3 @@
 This project is licensed under the [Apache License 2.0](LICENSE).
 
 ---
-
-> GitHub: [ParagEkbote/quantized-containerized-models](https://github.com/ParagEkbote/quantized-containerized-models)
