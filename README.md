@@ -1,6 +1,6 @@
 # quantized-containerized-models
 
-**quantized-containerized-models** is a project aimed at demonstrating how to deploy AI models inside efficient containerized environments. The repository is designed to help you efficiently serve lightweight, optimized models using modern DevOps practices.
+**quantized-containerized-models** is aimed at demonstrating how to deploy AI models inside efficient containerized environments. The repository is designed to help you efficiently serve lightweight, optimized models using modern DevOps practices.
 
 ## Features
 
