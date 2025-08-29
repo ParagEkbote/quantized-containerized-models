@@ -1,5 +1,3 @@
-# predictor.py
-
 from unsloth import FastLanguageModel
 import torch
 from cog import BasePredictor, Input, Path
@@ -20,37 +18,37 @@ class Predictor(BasePredictor):
     def setup(self):
         """
         Setup runs once when the container starts.
-        Loads the Unsloth GPT-OSS-20B model in 4-bit quantization.
+        Loads the Phi-4 reasoning-plus model with Unsloth in 4-bit.
         """
 
-        # Recommended: pre-quantized 4-bit version for Cog
-        model_id = "unsloth/gpt-oss-20b-unsloth-bnb-4bit"
+        # Target model
+        model_id = "unsloth/Phi-4-reasoning-plus"
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
         print(f"Loading model: {model_id} ...")
+        print(f"Using device: {device}")
+
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_id,
-            trust_remote_code=True
-        )
-        self.model, _ = FastLanguageModel.from_pretrained(
-            model_name=model_id,
-            max_seq_length=4096,       # Supports long context
-            dtype=torch.float16,       # FP16 for efficiency
-            load_in_4bit=True,         # 4-bit quantization
             trust_remote_code=True,
         )
-        self.model.eval()
+
+        self.model, _ = FastLanguageModel.from_pretrained(
+            model_name=model_id,
+            max_seq_length=131072,       # Phi-4 supports very long context
+            dtype=torch.bfloat16,
+            load_in_4bit=True,
+            trust_remote_code=True,
+            use_static_cache=False, 
+        )
 
     def predict(
         self,
         prompt: str = Input(description="Input text prompt"),
-        max_new_tokens: int = Input(description="Maximum number of new tokens", default=512),
+        max_new_tokens: int = Input(description="Maximum number of new tokens", default=1024),
         temperature: float = Input(description="Sampling temperature", default=0.7),
         top_p: float = Input(description="Top-p nucleus sampling", default=0.95),
-        reasoning_effort: str = Input(
-            description="Reasoning effort level: low, medium, or high",
-            choices=["low", "medium", "high"],
-            default="medium",
-        ),
         seed: int = Input(
             description="Random seed used in the output filename",
             default=42,
@@ -60,14 +58,13 @@ class Predictor(BasePredictor):
         Run inference on the given prompt and always save the output as .txt file.
         """
 
-        # Prepare chat-style input
+        # Prepare chat-style input with reasoning effort
         messages = [{"role": "user", "content": prompt}]
         inputs = self.tokenizer.apply_chat_template(
             messages,
             add_generation_prompt=True,
             return_tensors="pt",
             return_dict=True,
-            reasoning_effort=reasoning_effort,
         ).to(self.model.device)
 
         with torch.no_grad():
@@ -84,8 +81,9 @@ class Predictor(BasePredictor):
         result = self.tokenizer.decode(output[0], skip_special_tokens=True)
 
         print(f"\n[Prompt]: {prompt}")
-        print(f"[Generated Output]: {result}\n")
-        print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+        print(f"[Generated Output]: {result[:500]}...\n")  # shorten print
+        if torch.cuda.is_available():
+            print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
 
         # Always save output into /tmp for Cog
         output_path = save_text(SysPath("/tmp"), seed, "pred", result)
