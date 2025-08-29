@@ -12,5 +12,5 @@ build:
   - command: apt-get clean && rm -rf /var/lib/apt/lists/*
   - command: pip install packaging wheel ninja cmake torch
   - command: pip install -U flash-attn --no-build-isolation
-  - command: pip install transformers==4.54.0 accelerate==1.9.0 unsloth==2025.7.8 unsloth_zoo==2025.7.10
+  - command: pip install transformers accelerate unsloth unsloth_zoo
 predict: "predict.py:Predictor"
