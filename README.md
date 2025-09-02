@@ -21,7 +21,7 @@ sudo chmod +x /usr/local/bin/cog
 
 - [smollm3-3b-smashed](https://replicate.com/paragekbote/smollm3-3b-smashed): This project uses [Pruna](https://github.com/PrunaAI/pruna) to quantize and torch_compile the smollm3-3b model for faster generation and lower VRAM usage. This allows us to having a higher output context window of 16k tokens and hybrid reasoning capabilites. The code for the same is present [here](https://github.com/ParagEkbote/quantized-containerized-models/blob/9b914464ffe521506c68146f7109572ffffaa520/smollm3-3b-pruna/predict.py).
 
--[phi-4-reasoning-plus-unsloth](https://replicate.com/paragekbote/phi-4-reasoning-plus-unsloth): This project speeds up inferencing Microsoft’s Phi-4 reasoning model, accelerated with [Unsloth](https://docs.unsloth.ai/) for faster inference and reduced memory footprint.
+- [phi-4-reasoning-plus-unsloth](https://replicate.com/paragekbote/phi-4-reasoning-plus-unsloth): This project speeds up inferencing Microsoft’s Phi-4 reasoning model, accelerated with [Unsloth](https://docs.unsloth.ai/) for faster inference and reduced memory footprint.
 
 ## License
 
