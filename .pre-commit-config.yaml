@@ -43,5 +43,6 @@ repos:
         args: [
             "--ignore-missing-imports",  # Ignore missing stubs for 3rd-party packages
             "--show-column-numbers",
-            "--pretty"
+            "--pretty",
+            "--explicit-package-bases"
         ]
