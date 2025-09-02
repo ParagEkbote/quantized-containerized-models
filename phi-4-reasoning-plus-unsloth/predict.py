@@ -1,7 +1,9 @@
-from unsloth import FastLanguageModel
+from unsloth import FastLanguageModel #noqa
+from pathlib import Path as SysPath
+
 import torch
 from cog import BasePredictor, Input, Path
-from pathlib import Path as SysPath
+from unsloth import FastLanguageModel
 
 
 def save_text(output_folder: SysPath, seed: int, index: str, text: str) -> SysPath:
@@ -44,9 +46,11 @@ class Predictor(BasePredictor):
     def predict(
         self,
         prompt: str = Input(description="Input text prompt"),
-        max_new_tokens: int = Input(description="Maximum number of new tokens", default=3000,ge=1, le=25000),
-        temperature: float = Input(description="Sampling temperature", default=0.7,ge=0.1, le=1),
-        top_p: float = Input(description="Top-p nucleus sampling", default=0.95,ge=0.1, le=1),
+        max_new_tokens: int = Input(
+            description="Maximum number of new tokens", default=3000, ge=1, le=25000
+        ),
+        temperature: float = Input(description="Sampling temperature", default=0.7, ge=0.1, le=1),
+        top_p: float = Input(description="Top-p nucleus sampling", default=0.95, ge=0.1, le=1),
         seed: int = Input(description="Random seed", default=42),
     ) -> Path:
         # Set random seeds
@@ -55,16 +59,11 @@ class Predictor(BasePredictor):
             torch.cuda.manual_seed_all(seed)
 
         # Tokenize input and move to model's device
-        inputs = self.tokenizer(
-            prompt, 
-            return_tensors="pt", 
-            truncation=False
-        )
-        
+        inputs = self.tokenizer(prompt, return_tensors="pt", truncation=False)
+
         # Move input tensors to the same device as the model
         device = next(self.model.parameters()).device
-        inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v 
-                 for k, v in inputs.items()}
+        inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
 
         # Generate text with cache configuration disabled
         with torch.no_grad():
@@ -80,15 +79,12 @@ class Predictor(BasePredictor):
             )
 
         # Decode the generated text
-        generated_text = self.tokenizer.decode(
-            outputs[0], 
-            skip_special_tokens=True
-        )
+        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
         # Log results
         print(f"\n[Prompt]: {prompt}")
         print(f"[Generated Output]: {generated_text[:500]}...")
-        
+
         if torch.cuda.is_available():
             print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
 

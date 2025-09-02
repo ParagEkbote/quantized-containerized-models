@@ -53,15 +53,24 @@ class Predictor(BasePredictor):
         self.pipe.load_lora_weights(
             "aleksa-codes/flux-ghibsky-illustration",
             weight_name="lora_v2.safetensors",
-            adapter_name="flux-ghibsky",        # No hotswap=True here either - this is also first load
+            adapter_name="flux-ghibsky",  # No hotswap=True here either - this is also first load
         )
 
         self.current_adapter = "open-image-preferences"
 
         self.lora1_triggers = [
-            "Cinematic", "Photographic", "Anime", "Manga", "Digital art",
-            "Pixel art", "Fantasy art", "Neonpunk", "3D Model",
-            "Painting", "Animation", "Illustration",
+            "Cinematic",
+            "Photographic",
+            "Anime",
+            "Manga",
+            "Digital art",
+            "Pixel art",
+            "Fantasy art",
+            "Neonpunk",
+            "3D Model",
+            "Painting",
+            "Animation",
+            "Illustration",
         ]
         self.lora2_triggers = ["GHIBSKY"]
 
@@ -90,9 +99,7 @@ class Predictor(BasePredictor):
         self.pipe.text_encoder_2 = torch.compile(
             self.pipe.text_encoder_2, fullgraph=False, mode="reduce-overhead"
         )
-        self.pipe.vae = torch.compile(
-            self.pipe.vae, fullgraph=False, mode="reduce-overhead"
-        )
+        self.pipe.vae = torch.compile(self.pipe.vae, fullgraph=False, mode="reduce-overhead")
 
         pipe_kwargs = {
             "prompt": prompt,

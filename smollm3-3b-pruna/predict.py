@@ -1,6 +1,4 @@
 import tempfile
-from pathlib import Path
-from typing import Any
 
 import torch
 from cog import BasePredictor, Input, Path
@@ -92,7 +90,7 @@ class Predictor(BasePredictor):
                     inputs["input_ids"],
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
-                    top_p= top_p,
+                    top_p=top_p,
                     generator=generator,
                 )
             except Exception as e:
@@ -101,7 +99,7 @@ class Predictor(BasePredictor):
                     inputs["input_ids"],
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
-                    top_p= top_p,
+                    top_p=top_p,
                     generator=generator,
                 )
 
