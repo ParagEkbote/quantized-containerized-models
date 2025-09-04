@@ -1,7 +1,6 @@
 import os
 import uuid
 import time
-import logging
 from pathlib import Path
 from io import BytesIO
 
@@ -32,7 +31,7 @@ def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
 def load_image(init_image: str) -> Image.Image:
     """Load an image from either a URL or a local file path."""
     if init_image.startswith("http://") or init_image.startswith("https://"):
-        resp = requests.get(init_image, timeout=15)
+        resp = requests.get(init_image, timeout=30)
         resp.raise_for_status()
         return Image.open(BytesIO(resp.content)).convert("RGB")
     else:
@@ -55,11 +54,8 @@ class Predictor(BasePredictor):
             ),
         ).to("cuda")
 
-        try:
-            self.pipe.transformer.set_attention_backend("_flash_3_hub")
-            logging.info("FlashAttention v3 hub backend loaded successfully.")
-        except Exception as e:
-            logging.warning(f"FlashAttention v3 hub backend not available: {e}")
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = True
 
         self.pipe.enable_lora_hotswap(target_rank=8)
 
@@ -77,11 +73,11 @@ class Predictor(BasePredictor):
 
         self.current_adapter = "open-image-preferences"
 
-        self.lora1_triggers = ["Cinematic", "Photographic", "Anime", "Manga",
+        self.lora1_triggers = {"Cinematic", "Photographic", "Anime", "Manga",
                                "Digital art", "Pixel art", "Fantasy art",
                                "Neonpunk", "3D Model", "Painting",
-                               "Animation", "Illustration"]
-        self.lora2_triggers = ["GHIBSKY"]
+                               "Animation", "Illustration"}
+        self.lora2_triggers = {"GHIBSKY"}
 
         # Always compile key components
         self.pipe.text_encoder = torch.compile(self.pipe.text_encoder, fullgraph=False, mode="reduce-overhead")
@@ -92,11 +88,11 @@ class Predictor(BasePredictor):
         self,
         prompt: str = Input(description="Prompt for image generation."),
         trigger_word: str = Input(description="Trigger word to select LoRA."),
-        init_image: str = Input(description="Initial image (URL or local path)."),
+        init_image: str = Input(description="Initial image (URL)."),
         strength: float = Input(description="Strength of transformation.", default=0.6, ge=0, le=1),
-        guidance_scale: float = Input(description="Classifier-free guidance scale.", default=7.5, ge=0),
-        num_inference_steps: int = Input(description="Number of denoising steps.", default=28, ge=1),
-        seed: int = Input(description="Random seed.", default=None),
+        guidance_scale: float = Input(description="Classifier-free guidance scale follows the text prompt.", default=7.5, ge=0),
+        num_inference_steps: int = Input(description="Number of denoising steps for image generation.", default=28, ge=1),
+        seed: int = Input(description="Random seed.", default=42),
     ) -> Path:
         # Pick adapter
         if trigger_word in self.lora2_triggers and self.current_adapter != "flux-ghibsky":
