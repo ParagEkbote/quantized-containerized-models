@@ -21,6 +21,7 @@ build:
         "huggingface-hub[hf-xet]" \
         "sentencepiece>=0.1.95" \
         "protobuf>=3.20.0" \
+        "requests>=2.31.0"  \
         "torchao"
 
 predict: "predict.py:Predictor"

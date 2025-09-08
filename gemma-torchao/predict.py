@@ -2,22 +2,61 @@ import time
 import torch
 import requests
 from io import BytesIO
+import os
 from PIL import Image
 from cog import BasePredictor, Input
 from transformers import AutoModelForImageTextToText, AutoProcessor
 from torchao.quantization import quantize_, Int8WeightOnlyConfig
-from torchao.sparsity import sparsify_
-from torchao.sparse_api import semi_sparse_weight
+from torchao.sparsity import sparsify_, semi_sparse_weight
 import torch.nn as nn
+from huggingface_hub import login
+from datetime import datetime
+from dotenv import load_dotenv
 
-MODEL_ID = "google/gemma-3-12b-it"
+# Load HF_TOKEN from .env
+load_dotenv()
+hf_token = os.getenv("HF_TOKEN")
+if hf_token:
+    login(token=hf_token)
+else:
+    raise ValueError("HF_TOKEN not found in .env file")
 
-def filter_fn(module: nn.Module) -> bool:
-    return isinstance(module, nn.Linear)
+def filter_fn(module: nn.Module, full_name: str) -> bool:
+    """
+    Decide whether to sparsify a module.
+
+    Rules:
+    - Only sparsify nn.Linear layers.
+    - Sparsify QKV projections and MLP feed-forward layers.
+    - Skip embeddings and output heads to preserve accuracy.
+    - Skip LayerNorms and other sensitive layers.
+    """
+    if not isinstance(module, nn.Linear):
+        return False
+
+    name = full_name.lower()
+
+    # Skip embeddings and output projection
+    if "embed" in name or "lm_head" in name or "output_projection" in name:
+        return False
+
+    # Skip LayerNorms
+    if "norm" in name or "layernorm" in name:
+        return False
+
+    # Target attention projections (Q, K, V, out)
+    if "self_attn" in name or "attn" in name:
+        return True
+
+    # Target MLP feed-forward layers
+    if "mlp" in name or "fc" in name:
+        return True
+
+    return False
 
 def save_output_to_file(text: str, filename: str = None) -> str:
-    """Save model output to a text file. Default: timestamped filename."""
-    if filename is None:
+    """Save model output to a text file. Defaults to timestamped filename if none provided."""
+    if not filename:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"output_{timestamp}.txt"
     with open(filename, "w", encoding="utf-8") as f:
@@ -26,30 +65,41 @@ def save_output_to_file(text: str, filename: str = None) -> str:
 
 class Predictor(BasePredictor):
     def setup(self):
+        MODEL_ID = "google/gemma-3-4b-it"
         self.processor = AutoProcessor.from_pretrained(MODEL_ID)
         model = AutoModelForImageTextToText.from_pretrained(
             MODEL_ID,
             torch_dtype=torch.bfloat16,
             device_map="auto",
         )
-        quantize_(model, Int8WeightOnlyConfig())
+        # Keep model unquantized for now so sparsity can be applied safely
         self.model = model.eval()
 
     def predict(
         self,
         prompt: str = Input(description="Input text prompt"),
-        image_url: str = Input(description="Optional image URL", default=None),
+        image_url: str = Input(description="Optional image URL"),
         max_new_tokens: int = Input(default=128, ge=1, le=1024),
-        temperature: float = Input(default=0.7,description="Sampling temperature"),
+        temperature: float = Input(default=0.7, description="Sampling temperature"),
         top_p: float = Input(default=0.9, description="Top-p nucleus sampling"),
-        seed: int = Input(default=42,description="Random seed for reproducibility"),
-        use_sparsity: bool = Input(default=False, description="Enable 2:4 semi-sparsity on Linear layers"),
+        seed: int = Input(default=42, description="Random seed for reproducibility"),
+        use_sparsity: str = Input(default="false", description="Enable 2:4 semi-sparsity on Linear layers ('true'/'false')"),
     ) -> str:
         torch.manual_seed(seed)
 
-        if use_sparsity:
-            self.model = sparsify_(self.model, semi_sparse_weight(), filter_fn).eval()
+        # Convert string to boolean
+        use_sparsity_flag = str(use_sparsity).strip().lower() in {"true", "1", "yes", "y"}
 
+        # Apply sparsity first if requested (in-place)
+        if use_sparsity_flag:
+            sparsify_(self.model, semi_sparse_weight(), filter_fn)
+            self.model.eval()
+
+        # Apply quantization after sparsity
+        quantize_(self.model, Int8WeightOnlyConfig())
+        self.model.eval()
+
+        # Load image if provided
         image = None
         if image_url:
             response = requests.get(image_url, stream=True)
@@ -75,7 +125,11 @@ class Predictor(BasePredictor):
             )
         elapsed = time.time() - start
 
-        print(f"VRAM used: {torch.cuda.memory_allocated() / 1e9:.2f} GB | Time: {elapsed:.2f}s")
+        try:
+            vram = torch.cuda.memory_allocated() / 1e9
+        except Exception:
+            vram = 0.0
+        print(f"VRAM used: {vram:.2f} GB | Time: {elapsed:.2f}s")
 
         decoded = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
 
