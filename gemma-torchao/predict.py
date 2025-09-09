@@ -89,7 +89,7 @@ def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
     return any(target in name for target in target_layers)
 
 
-d efstructured_pruning_safe(model, sparsity_ratio=0.10):
+def structured_pruning_safe(model, sparsity_ratio=0.10):
     """
     Least-breaking structured sparsity: zero out the least important channels
     instead of actually removing them, so layer shapes remain intact.
