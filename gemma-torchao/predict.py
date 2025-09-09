@@ -22,7 +22,6 @@ if hf_token:
 else:
     raise ValueError("HF_TOKEN not found in .env file")
 
-
 # ------------------------
 # Output saving
 # ------------------------
@@ -34,7 +33,6 @@ def save_output_to_file(text: str, filename: str | None = None) -> str:
         f.write(text)
     return filename
 
-
 # ------------------------
 # Safe sparsity utilities
 # ------------------------
@@ -45,21 +43,28 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
                 continue
             if hasattr(module, 'weight') and isinstance(module.weight, torch.Tensor):
                 weight = module.weight.data
-                flat_weights = weight.abs().flatten()
-                threshold = torch.quantile(flat_weights, sparsity_ratio)
-                mask = weight.abs() > threshold
-                weight.mul_(mask)
-                module.register_buffer('sparse_mask', mask)
-                sparsity_achieved = (weight == 0).float().mean().item()
-                print(f"Layer {name}: {sparsity_achieved:.2%} sparsity achieved")
-
+                flat_weights = weight.abs().flatten().float()
+                try:
+                    # Top-k safe pruning for large tensors
+                    k = int(flat_weights.numel() * (1 - sparsity_ratio))
+                    if k == 0:
+                        continue
+                    topk_vals, _ = torch.topk(flat_weights, k)
+                    threshold = topk_vals[-1]  # smallest value in top-k
+                    mask = weight.abs() >= threshold
+                    weight.mul_(mask)
+                    module.register_buffer('sparse_mask', mask)
+                    sparsity_achieved = (weight == 0).float().mean().item()
+                    print(f"Layer {name}: {sparsity_achieved:.2%} sparsity achieved")
+                except RuntimeError as e:
+                    print(f"Layer {name}: Skipping sparsity due to large tensor ({e})")
 
 def structured_pruning(model, channels_to_remove=0.25):
     for name, module in model.named_modules():
         if isinstance(module, nn.Linear):
             weight = module.weight.data
             if len(weight.shape) > 1:
-                channel_importance = weight.norm(dim=1)
+                channel_importance = weight.float().norm(dim=1)
                 num_remove = int(weight.shape[0] * channels_to_remove)
                 if num_remove > 0:
                     _, indices_to_remove = torch.topk(channel_importance, num_remove, largest=False)
@@ -68,12 +73,10 @@ def structured_pruning(model, channels_to_remove=0.25):
                     new_weight = weight[keep_mask]
                     print(f"Layer {name}: Removed {num_remove}/{weight.shape[0]} channels")
 
-
 def gradual_magnitude_pruning(model, target_sparsity=0.5, current_step=0, total_steps=1000):
     current_sparsity = target_sparsity * min(current_step / total_steps, 1.0)
     magnitude_based_pruning(model, current_sparsity)
     return current_sparsity
-
 
 def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
     if not isinstance(module, nn.Linear):
@@ -86,12 +89,39 @@ def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
     return any(target in name for target in target_layers)
 
 
+d efstructured_pruning_safe(model, sparsity_ratio=0.10):
+    """
+    Least-breaking structured sparsity: zero out the least important channels
+    instead of actually removing them, so layer shapes remain intact.
+    """
+    total_zeros = 0
+    total_params = 0
+
+    for name, module in model.named_modules():
+        if isinstance(module, nn.Linear):
+            weight = module.weight.data
+            total_params += weight.numel()
+
+            if len(weight.shape) > 1:
+                # L2 norm per output channel
+                channel_importance = weight.norm(dim=1)
+                num_zero = int(weight.shape[0] * sparsity_ratio)
+                if num_zero > 0:
+                    _, indices_to_zero = torch.topk(channel_importance, num_zero, largest=False)
+                    weight[indices_to_zero] = 0.0  # zero-out least important channels
+                    total_zeros += num_zero * weight.shape[1]  # count zeros
+                    print(f"Layer {name}: Zeroed {num_zero}/{weight.shape[0]} channels")
+
+    overall_sparsity = total_zeros / total_params
+    print(f"Overall safe structured sparsity: {overall_sparsity:.2%}")
+    return overall_sparsity
+
 def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
     print(f"Applying {sparsity_type} sparsity with ratio {sparsity_ratio}")
     if sparsity_type == "magnitude":
         magnitude_based_pruning(model, sparsity_ratio, gemma_filter_fn)
     elif sparsity_type == "structured":
-        structured_pruning(model, sparsity_ratio)
+        structured_pruning_safe(model, sparsity_ratio)
     elif sparsity_type == "gradual":
         gradual_magnitude_pruning(model, sparsity_ratio)
     total_params = sum(p.numel() for p in model.parameters())
@@ -99,7 +129,6 @@ def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
     overall_sparsity = sparse_params / total_params
     print(f"Overall model sparsity: {overall_sparsity:.2%}")
     return overall_sparsity
-
 
 # ------------------------
 # Quantization helper
@@ -119,7 +148,6 @@ def sanitize_weights_for_quantization(model: torch.nn.Module):
             except Exception as e:
                 print(f"Warning: Could not sanitize weight for {name}: {e}")
 
-
 # ------------------------
 # Chat formatting
 # ------------------------
@@ -132,7 +160,6 @@ def format_chat_messages(prompt: str, image_url: str | None = None):
     user_content.append({"type": "text", "text": prompt})
     messages.append({"role": "user", "content": user_content})
     return messages
-
 
 # ------------------------
 # Predictor
@@ -164,19 +191,20 @@ class Predictor(BasePredictor):
         temperature: float = Input(default=0.7),
         top_p: float = Input(default=0.9),
         seed: int = Input(default=42),
-        use_quantization: bool = Input(default=True, description="Enable INT8 quantization"),
-        use_sparsity: bool = Input(default=False, description="Enable sparsity optimization"),
+        use_quantization: str = Input(default="true", description="Enable INT8 quantization using torchao"),
+        use_sparsity: str = Input(default="false", description="Enable sparsity optimization"),
         sparsity_type: str = Input(default="magnitude", description="Type of sparsity"),
         sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.8),
     ) -> str:
         torch.manual_seed(seed)
 
-        # Sparsity
-        if use_sparsity and sparsity_ratio > 0:
+        use_quantization_flag = str(use_quantization).strip().lower() in {"true", "1", "yes", "y","True"}
+        use_sparsity_flag = str(use_sparsity).strip().lower() in {"true", "1", "yes", "y","True",}
+
+        if use_sparsity_flag and sparsity_ratio > 0:
             self.add_sparsity(sparsity_type, sparsity_ratio)
 
-        # Quantization
-        if use_quantization:
+        if use_quantization_flag:
             try:
                 sanitize_weights_for_quantization(self.model)
                 quantize_(self.model, Int8WeightOnlyConfig())
@@ -184,7 +212,6 @@ class Predictor(BasePredictor):
             except Exception as e:
                 print(f"Warning: Quantization failed: {e}")
 
-        # Image load
         image = None
         if image_url:
             try:
@@ -196,9 +223,7 @@ class Predictor(BasePredictor):
                 print(f"Warning: Failed to load image from {image_url}: {e}")
                 image = None
 
-        # Format messages
         messages = format_chat_messages(prompt, image_url if image else None)
-
         try:
             formatted_prompt = self.processor.tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
