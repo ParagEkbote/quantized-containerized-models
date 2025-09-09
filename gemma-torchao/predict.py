@@ -36,19 +36,12 @@ def filter_fn(module: nn.Module, full_name: str) -> bool:
 
     name = full_name.lower()
 
-    # Skip embeddings and output projection
     if "embed" in name or "lm_head" in name or "output_projection" in name:
         return False
-
-    # Skip LayerNorms
     if "norm" in name or "layernorm" in name:
         return False
-
-    # Target attention projections (Q, K, V, out)
     if "self_attn" in name or "attn" in name:
         return True
-
-    # Target MLP feed-forward layers
     if "mlp" in name or "fc" in name:
         return True
 
@@ -63,17 +56,36 @@ def save_output_to_file(text: str, filename: str = None) -> str:
         f.write(text)
     return filename
 
+def sanitize_weights_for_quantization(model: torch.nn.Module):
+    """
+    Prepare weights so that quantization doesn't hit view/aliasing errors.
+    Special-cases sparse semi-structured tensors that don't support .clone().
+    """
+    for m in model.modules():
+        if hasattr(m, "weight") and isinstance(m.weight, torch.Tensor):
+            w = m.weight
+            if w.is_meta:
+                continue
+
+            # Handle sparse semi-structured weights
+            if w.__class__.__name__ == "SparseSemiStructuredTensorCUSPARSELT":
+                new_w = w.detach()  # no clone, keep sparse structure
+            else:
+                new_w = w.detach().clone().contiguous()
+
+            new_w.requires_grad = w.requires_grad
+            m._parameters["weight"] = torch.nn.Parameter(new_w)
+
+
 class Predictor(BasePredictor):
     def setup(self):
         MODEL_ID = "google/gemma-3-4b-it"
         self.processor = AutoProcessor.from_pretrained(MODEL_ID)
-        model = AutoModelForImageTextToText.from_pretrained(
+        self.model = AutoModelForImageTextToText.from_pretrained(
             MODEL_ID,
             torch_dtype=torch.bfloat16,
             device_map="auto",
         )
-        # Keep model unquantized for now so sparsity can be applied safely
-        self.model = model.eval()
 
     def predict(
         self,
@@ -90,14 +102,13 @@ class Predictor(BasePredictor):
         # Convert string to boolean
         use_sparsity_flag = str(use_sparsity).strip().lower() in {"true", "1", "yes", "y"}
 
-        # Apply sparsity first if requested (in-place)
+        # Apply sparsity first if requested
         if use_sparsity_flag:
             sparsify_(self.model, semi_sparse_weight(), filter_fn)
-            self.model.eval()
 
         # Apply quantization after sparsity
+        sanitize_weights_for_quantization(self.model)
         quantize_(self.model, Int8WeightOnlyConfig())
-        self.model.eval()
 
         # Load image if provided
         image = None
