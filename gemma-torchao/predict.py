@@ -121,9 +121,9 @@ def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
     if sparsity_type == "magnitude":
         magnitude_based_pruning(model, sparsity_ratio, gemma_filter_fn)
     elif sparsity_type == "structured":
-        structured_pruning_safe(model, sparsity_ratio)
+        structured_pruning_safe(model, sparsity_ratio,gemma_filter_fn)
     elif sparsity_type == "gradual":
-        gradual_magnitude_pruning(model, sparsity_ratio)
+        gradual_magnitude_pruning(model, sparsity_ratio,gemma_filter_fn)
     total_params = sum(p.numel() for p in model.parameters())
     sparse_params = sum((p == 0).sum().item() for p in model.parameters())
     overall_sparsity = sparse_params / total_params
