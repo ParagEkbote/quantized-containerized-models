@@ -5,6 +5,7 @@ from io import BytesIO
 import os
 from PIL import Image
 from cog import BasePredictor, Input
+from pathlib import Path
 from transformers import AutoModelForImageTextToText, AutoProcessor
 from torchao.quantization import quantize_, Int8WeightOnlyConfig
 import torch.nn as nn
@@ -22,16 +23,14 @@ if hf_token:
 else:
     raise ValueError("HF_TOKEN not found in .env file")
 
-# ------------------------
-# Output saving
-# ------------------------
-def save_output_to_file(text: str, filename: str | None = None) -> str:
-    if not filename:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"output_{timestamp}.txt"
-    with open(filename, "w", encoding="utf-8") as f:
+
+def save_output_to_file(output_folder: Path, seed: int, index: int | str, text: str) -> Path:
+    """Save the generated text to disk as a .txt file."""
+    output_path = output_folder / f"output_{seed}_{index}.txt"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
         f.write(text)
-    return filename
+    return output_path
 
 # ------------------------
 # Safe sparsity utilities
@@ -121,9 +120,9 @@ def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
     if sparsity_type == "magnitude":
         magnitude_based_pruning(model, sparsity_ratio, gemma_filter_fn)
     elif sparsity_type == "structured":
-        structured_pruning_safe(model, sparsity_ratio)
+        structured_pruning_safe(model, sparsity_ratio,gemma_filter_fn)
     elif sparsity_type == "gradual":
-        gradual_magnitude_pruning(model, sparsity_ratio)
+        gradual_magnitude_pruning(model, sparsity_ratio,gemma_filter_fn)
     total_params = sum(p.numel() for p in model.parameters())
     sparse_params = sum((p == 0).sum().item() for p in model.parameters())
     overall_sparsity = sparse_params / total_params
@@ -161,9 +160,7 @@ def format_chat_messages(prompt: str, image_url: str | None = None):
     messages.append({"role": "user", "content": user_content})
     return messages
 
-# ------------------------
-# Predictor
-# ------------------------
+
 class Predictor(BasePredictor):
     def setup(self):
         MODEL_ID = "google/gemma-3-4b-it"
@@ -187,10 +184,10 @@ class Predictor(BasePredictor):
         self,
         prompt: str = Input(description="Input text prompt"),
         image_url: str | None = Input(description="Optional image URL", default=None),
-        max_new_tokens: int = Input(default=128, ge=1, le=1024),
-        temperature: float = Input(default=0.7, ge=0.0, le=2.0,),
-        top_p: float = Input(default=0.9,ge=0.0, le=1.0),
-        seed: int = Input(default=42),
+        max_new_tokens: int = Input(default=128, ge=1, le=2500,description="Maximum number of new tokens"),
+        temperature: float = Input(default=0.7,description="Sampling temperature", ge=0.0, le=2.0,),
+        top_p: float = Input(default=0.9, description="Top-p nucleus sampling",ge=0.0, le=1.0),
+        seed: int = Input(default=42,description="Seed for reproducibility"),
         use_quantization: str = Input(default="true", description="Enable INT8 quantization using torchao"),
         use_sparsity: str = Input(default="false", description="Enable sparsity optimization using torchao"),
         sparsity_type: str = Input(default="magnitude", description="Type of sparsity"),
