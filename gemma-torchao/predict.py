@@ -1,17 +1,17 @@
-import time
-import torch
-import requests
-from io import BytesIO
 import os
-from PIL import Image
-from cog import BasePredictor, Input
-from pathlib import Path
-from transformers import AutoModelForImageTextToText, AutoProcessor
-from torchao.quantization import quantize_, Int8WeightOnlyConfig
+import time
+from io import BytesIO
+from pathlib import Path as SysPath
+
+import requests
+import torch
 import torch.nn as nn
-from huggingface_hub import login
-from datetime import datetime
+from cog import BasePredictor, Input
 from dotenv import load_dotenv
+from huggingface_hub import login
+from PIL import Image
+from torchao.quantization import Int8WeightOnlyConfig, quantize_
+from transformers import AutoModelForImageTextToText, AutoProcessor
 
 # ------------------------
 # Hugging Face login
@@ -24,7 +24,7 @@ else:
     raise ValueError("HF_TOKEN not found in .env file")
 
 
-def save_output_to_file(output_folder: Path, seed: int, index: int | str, text: str) -> Path:
+def save_output_to_file(output_folder: SysPath, seed: int, index: int | str, text: str) -> SysPath:
     """Save the generated text to disk as a .txt file."""
     output_path = output_folder / f"output_{seed}_{index}.txt"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -32,9 +32,11 @@ def save_output_to_file(output_folder: Path, seed: int, index: int | str, text: 
         f.write(text)
     return output_path
 
+
 # ------------------------
 # Safe sparsity utilities
 # ------------------------
+
 
 def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
     if not isinstance(module, nn.Linear):
@@ -43,10 +45,15 @@ def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
     if any(skip in name for skip in ["embed", "lm_head", "output", "norm", "layernorm"]):
         return False
     target_layers = [
-        "self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj",
-        "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj"
+        "self_attn.q_proj",
+        "self_attn.k_proj",
+        "self_attn.v_proj",
+        "mlp.gate_proj",
+        "mlp.up_proj",
+        "mlp.down_proj",
     ]
     return any(target in name for target in target_layers)
+
 
 def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
     with torch.no_grad():
@@ -71,6 +78,7 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
                 except RuntimeError as e:
                     print(f"Layer {name}: Skipping sparsity due to large tensor ({e})")
 
+
 def gradual_magnitude_pruning(
     model,
     target_sparsity: float = 0.5,
@@ -93,6 +101,7 @@ def gradual_magnitude_pruning(
                 weight *= mask.view_as(weight)
 
     return current_sparsity
+
 
 def structured_pruning_safe(model, sparsity_ratio=0.10, filter_fn=None):
     """
@@ -145,6 +154,7 @@ def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
     print(f"Overall model sparsity: {overall_sparsity:.2%}")
     return overall_sparsity
 
+
 # ------------------------
 # Quantization helper
 # ------------------------
@@ -154,7 +164,9 @@ def sanitize_weights_for_quantization(model: torch.nn.Module):
             w = module.weight
             if w.is_meta:
                 continue
-            if hasattr(w, '__sparse_coo_tensor_unsafe__') or 'SparseSemiStructured' in str(type(w)):
+            if hasattr(w, '__sparse_coo_tensor_unsafe__') or 'SparseSemiStructured' in str(
+                type(w)
+            ):
                 continue
             try:
                 new_w = w.detach().contiguous()
@@ -162,6 +174,7 @@ def sanitize_weights_for_quantization(model: torch.nn.Module):
                 module._parameters["weight"] = nn.Parameter(new_w)
             except Exception as e:
                 print(f"Warning: Could not sanitize weight for {name}: {e}")
+
 
 # ------------------------
 # Chat formatting
@@ -200,19 +213,42 @@ class Predictor(BasePredictor):
         self,
         prompt: str = Input(description="Input text prompt"),
         image_url: str | None = Input(description="Optional image URL", default=None),
-        max_new_tokens: int = Input(default=128, ge=1, le=2500,description="Maximum number of new tokens"),
-        temperature: float = Input(default=0.7,description="Sampling temperature", ge=0.0, le=2.0,),
-        top_p: float = Input(default=0.9, description="Top-p nucleus sampling",ge=0.0, le=1.0),
-        seed: int = Input(default=42,description="Seed for reproducibility"),
-        use_quantization: str = Input(default="true", description="Enable INT8 quantization using torchao"),
-        use_sparsity: str = Input(default="false", description="Enable sparsity optimization using torchao"),
+        max_new_tokens: int = Input(
+            default=128, ge=1, le=2500, description="Maximum number of new tokens"
+        ),
+        temperature: float = Input(
+            default=0.7,
+            description="Sampling temperature",
+            ge=0.0,
+            le=2.0,
+        ),
+        top_p: float = Input(default=0.9, description="Top-p nucleus sampling", ge=0.0, le=1.0),
+        seed: int = Input(default=42, description="Seed for reproducibility"),
+        use_quantization: str = Input(
+            default="true", description="Enable INT8 quantization using torchao"
+        ),
+        use_sparsity: str = Input(
+            default="false", description="Enable sparsity optimization using torchao"
+        ),
         sparsity_type: str = Input(default="magnitude", description="Type of sparsity"),
         sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.8),
     ) -> str:
         torch.manual_seed(seed)
 
-        use_quantization_flag = str(use_quantization).strip().lower() in {"true", "1", "yes", "y","True"}
-        use_sparsity_flag = str(use_sparsity).strip().lower() in {"true", "1", "yes", "y","True",}
+        use_quantization_flag = str(use_quantization).strip().lower() in {
+            "true",
+            "1",
+            "yes",
+            "y",
+            "True",
+        }
+        use_sparsity_flag = str(use_sparsity).strip().lower() in {
+            "true",
+            "1",
+            "yes",
+            "y",
+            "True",
+        }
 
         if use_sparsity_flag and sparsity_ratio > 0:
             self.add_sparsity(sparsity_type, sparsity_ratio)
@@ -283,15 +319,18 @@ class Predictor(BasePredictor):
             decoded = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
             input_length = inputs['input_ids'].shape[1]
             generated_tokens = outputs[0][input_length:]
-            generated_text = self.processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            generated_text = self.processor.tokenizer.decode(
+                generated_tokens, skip_special_tokens=True
+            )
             final_output = generated_text.strip() if generated_text.strip() else decoded
         except Exception as e:
             print(f"Decoding error: {e}")
             final_output = str(outputs)
 
         try:
-            filename = save_output_to_file(final_output)
-            print(f"Output saved to {filename}")
+            output_path = save_output_to_file(SysPath("/tmp"), seed, "pred", generated_text)
+            print(f"Saved output to {output_path}")
+            output_path = SysPath(str(output_path))
         except Exception as e:
             print(f"Warning: Could not save output to file: {e}")
 
