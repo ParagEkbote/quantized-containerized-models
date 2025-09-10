@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path as SysPath
 
 import requests
+from datetime import datetime
 import torch
 import torch.nn as nn
 from cog import BasePredictor, Input
@@ -24,13 +25,22 @@ else:
     raise ValueError("HF_TOKEN not found in .env file")
 
 
-def save_output_to_file(output_folder: SysPath, seed: int, index: int | str, text: str) -> SysPath:
-    """Save the generated text to disk as a .txt file."""
-    output_path = output_folder / f"output_{seed}_{index}.txt"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
+from datetime import datetime
+
+def save_output_to_file(text: str, filename: str | None = None) -> str:
+    """
+    Save text to a file in the current working directory.
+    If filename is not provided, it generates one with a timestamp.
+    """
+    if filename is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"output_{timestamp}.txt"
+    
+    file_path = SysPath(filename)  # no folder, directly current working directory
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(text)
-    return output_path
+    
+    return str(file_path)
 
 
 # ------------------------
@@ -82,12 +92,14 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
 def gradual_magnitude_pruning(
     model,
     target_sparsity: float = 0.5,
-    current_step: int = 0,
+    current_step: int = 10,
     total_steps: int = 1000,
     filter_fn=None,
 ):
     """Gradually increase sparsity over steps, applying filter_fn if provided."""
     current_sparsity = target_sparsity * min(current_step / total_steps, 1.0)
+
+    print(f"\n[Pruning Step {current_step}/{total_steps}] Target sparsity: {current_sparsity:.2%}")
 
     for name, module in model.named_modules():
         if filter_fn and not filter_fn(module, name):
@@ -98,7 +110,10 @@ def gradual_magnitude_pruning(
             if k > 0:
                 threshold, _ = torch.topk(weight.abs().view(-1), k, largest=False)
                 mask = weight.abs() >= threshold[-1]
+                num_pruned = weight.numel() - mask.sum().item()
                 weight *= mask.view_as(weight)
+                print(f"Layer '{name}': pruned {num_pruned}/{weight.numel()} weights "
+                      f"({num_pruned / weight.numel():.2%})")
 
     return current_sparsity
 
@@ -192,6 +207,10 @@ def format_chat_messages(prompt: str, image_url: str | None = None):
 
 class Predictor(BasePredictor):
     def setup(self):
+
+        torch.backends.cuda.matmul.allow_tf32 = True          # enable TensorFloat32 for matmul on Ampere+ GPUs
+        torch.backends.cudnn.benchmark = True                # auto-tune cuDNN for better performance
+        torch.backends.cudnn.allow_tf32 = True               # enable TF32 for cuDNN convs
         MODEL_ID = "google/gemma-3-4b-it"
         self.processor = AutoProcessor.from_pretrained(MODEL_ID)
         self.model = AutoModelForImageTextToText.from_pretrained(
@@ -209,6 +228,17 @@ class Predictor(BasePredictor):
                 print(f"Warning: Sparsity application failed: {e}")
                 print("Continuing without sparsity...")
 
+        if hasattr(self.model.language_model, "embed_tokens"):
+            self.model.language_model.embed_tokens = torch.compile(
+            self.model.language_model.embed_tokens
+        )
+        print("Embed tokens layer compiled successfully",flush=True)
+
+    # Compile the LM head
+        if hasattr(self.model, "lm_head"):
+            self.model.lm_head = torch.compile(self.model.lm_head)
+        print("LM head layer compiled successfully",flush=True)
+    
     def predict(
         self,
         prompt: str = Input(description="Input text prompt"),
@@ -328,9 +358,8 @@ class Predictor(BasePredictor):
             final_output = str(outputs)
 
         try:
-            output_path = save_output_to_file(SysPath("/tmp"), seed, "pred", generated_text)
-            print(f"Saved output to {output_path}")
-            output_path = SysPath(str(output_path))
+            file_path = save_output_to_file(final_output)
+            print(f"Saved output persistently to {file_path}")
         except Exception as e:
             print(f"Warning: Could not save output to file: {e}")
 
