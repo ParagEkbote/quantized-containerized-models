@@ -7,8 +7,8 @@ build:
     - "git"
     - "build-essential"
   run:
-    # Install uv first
-    - command: pip install uv
+    # Install uv (faster than pip)
+    - command: curl -LsSf https://astral.sh/uv/install.sh | sh
     - command: apt-get update && apt-get install -y git
     - command: apt-get clean && rm -rf /var/lib/apt/lists/*
     # Install required Python packages using uv with --system
