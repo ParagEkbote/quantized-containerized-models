@@ -23,7 +23,7 @@ sudo chmod +x /usr/local/bin/cog
 
 - [phi-4-reasoning-plus-unsloth](https://replicate.com/paragekbote/phi-4-reasoning-plus-unsloth): This project speeds up inferencing Microsoft’s Phi-4 reasoning model, accelerated with [Unsloth](https://docs.unsloth.ai/) for faster inference and reduced memory footprint.
 
--[paragekbote/gemma3-torchao-quant-sparse](https://replicate.com/paragekbote/gemma3-torchao-quant-sparse): This project improves the inference of gemma3-4b-it by using torchao to use int8 quantization and multiple sparsity methods such as granular or magnitude. 
+- [paragekbote/gemma3-torchao-quant-sparse](https://replicate.com/paragekbote/gemma3-torchao-quant-sparse): This project improves the inference of gemma3-4b-it by using torchao to use int8 quantization and multiple sparsity methods such as granular or magnitude. 
 
 ## License
 
