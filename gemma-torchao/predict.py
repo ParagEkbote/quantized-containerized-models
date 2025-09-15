@@ -1,17 +1,18 @@
-import time
-import torch
-import requests
-from io import BytesIO
 import os
-from PIL import Image
-from cog import BasePredictor, Input
-from pathlib import Path
-from transformers import AutoModelForImageTextToText, AutoProcessor
-from torchao.quantization import quantize_, Int8WeightOnlyConfig
-import torch.nn as nn
-from huggingface_hub import login
+import time
 from datetime import datetime
+from io import BytesIO
+from pathlib import Path
+
+import requests
+import torch
+import torch.nn as nn
+from cog import BasePredictor, Input
 from dotenv import load_dotenv
+from huggingface_hub import login
+from PIL import Image
+from torchao.quantization import Int8WeightOnlyConfig, quantize_
+from transformers import AutoModelForImageTextToText, AutoProcessor
 
 # ------------------------
 # Hugging Face login
@@ -31,6 +32,7 @@ def save_output_to_file(output_folder: Path, seed: int, index: int | str, text: 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(text)
     return output_path
+
 
 # ------------------------
 # Safe sparsity utilities
@@ -58,6 +60,7 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
                 except RuntimeError as e:
                     print(f"Layer {name}: Skipping sparsity due to large tensor ({e})")
 
+
 def structured_pruning(model, channels_to_remove=0.25):
     for name, module in model.named_modules():
         if isinstance(module, nn.Linear):
@@ -66,16 +69,20 @@ def structured_pruning(model, channels_to_remove=0.25):
                 channel_importance = weight.float().norm(dim=1)
                 num_remove = int(weight.shape[0] * channels_to_remove)
                 if num_remove > 0:
-                    _, indices_to_remove = torch.topk(channel_importance, num_remove, largest=False)
+                    _, indices_to_remove = torch.topk(
+                        channel_importance, num_remove, largest=False
+                    )
                     keep_mask = torch.ones(weight.shape[0], dtype=torch.bool, device=weight.device)
                     keep_mask[indices_to_remove] = False
                     new_weight = weight[keep_mask]
                     print(f"Layer {name}: Removed {num_remove}/{weight.shape[0]} channels")
 
+
 def gradual_magnitude_pruning(model, target_sparsity=0.5, current_step=0, total_steps=1000):
     current_sparsity = target_sparsity * min(current_step / total_steps, 1.0)
     magnitude_based_pruning(model, current_sparsity)
     return current_sparsity
+
 
 def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
     if not isinstance(module, nn.Linear):
@@ -83,8 +90,14 @@ def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
     name = full_name.lower()
     if any(skip in name for skip in ["embed", "lm_head", "output", "norm", "layernorm"]):
         return False
-    target_layers = ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj",
-                     "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj"]
+    target_layers = [
+        "self_attn.q_proj",
+        "self_attn.k_proj",
+        "self_attn.v_proj",
+        "mlp.gate_proj",
+        "mlp.up_proj",
+        "mlp.down_proj",
+    ]
     return any(target in name for target in target_layers)
 
 
@@ -115,19 +128,21 @@ def structured_pruning_safe(model, sparsity_ratio=0.10):
     print(f"Overall safe structured sparsity: {overall_sparsity:.2%}")
     return overall_sparsity
 
+
 def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
     print(f"Applying {sparsity_type} sparsity with ratio {sparsity_ratio}")
     if sparsity_type == "magnitude":
         magnitude_based_pruning(model, sparsity_ratio, gemma_filter_fn)
     elif sparsity_type == "structured":
-        structured_pruning_safe(model, sparsity_ratio,gemma_filter_fn)
+        structured_pruning_safe(model, sparsity_ratio, gemma_filter_fn)
     elif sparsity_type == "gradual":
-        gradual_magnitude_pruning(model, sparsity_ratio,gemma_filter_fn)
+        gradual_magnitude_pruning(model, sparsity_ratio, gemma_filter_fn)
     total_params = sum(p.numel() for p in model.parameters())
     sparse_params = sum((p == 0).sum().item() for p in model.parameters())
     overall_sparsity = sparse_params / total_params
     print(f"Overall model sparsity: {overall_sparsity:.2%}")
     return overall_sparsity
+
 
 # ------------------------
 # Quantization helper
@@ -138,7 +153,9 @@ def sanitize_weights_for_quantization(model: torch.nn.Module):
             w = module.weight
             if w.is_meta:
                 continue
-            if hasattr(w, '__sparse_coo_tensor_unsafe__') or 'SparseSemiStructured' in str(type(w)):
+            if hasattr(w, '__sparse_coo_tensor_unsafe__') or 'SparseSemiStructured' in str(
+                type(w)
+            ):
                 continue
             try:
                 new_w = w.detach().contiguous()
@@ -146,6 +163,7 @@ def sanitize_weights_for_quantization(model: torch.nn.Module):
                 module._parameters["weight"] = nn.Parameter(new_w)
             except Exception as e:
                 print(f"Warning: Could not sanitize weight for {name}: {e}")
+
 
 # ------------------------
 # Chat formatting
@@ -184,19 +202,35 @@ class Predictor(BasePredictor):
         self,
         prompt: str = Input(description="Input text prompt"),
         image_url: str | None = Input(description="Optional image URL", default=None),
-        max_new_tokens: int = Input(default=128, ge=1, le=2500,description="Maximum number of new tokens"),
-        temperature: float = Input(default=0.7,description="Sampling temperature"),
+        max_new_tokens: int = Input(
+            default=128, ge=1, le=2500, description="Maximum number of new tokens"
+        ),
+        temperature: float = Input(default=0.7, description="Sampling temperature"),
         top_p: float = Input(default=0.9, description="Top-p nucleus sampling"),
-        seed: int = Input(default=42,description="Seed for reproducibility"),
-        use_quantization: str = Input(default="true", description="Enable INT8 quantization using torchao"),
+        seed: int = Input(default=42, description="Seed for reproducibility"),
+        use_quantization: str = Input(
+            default="true", description="Enable INT8 quantization using torchao"
+        ),
         use_sparsity: str = Input(default="false", description="Enable sparsity optimization"),
         sparsity_type: str = Input(default="magnitude", description="Type of sparsity"),
         sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.8),
     ) -> str:
         torch.manual_seed(seed)
 
-        use_quantization_flag = str(use_quantization).strip().lower() in {"true", "1", "yes", "y","True"}
-        use_sparsity_flag = str(use_sparsity).strip().lower() in {"true", "1", "yes", "y","True",}
+        use_quantization_flag = str(use_quantization).strip().lower() in {
+            "true",
+            "1",
+            "yes",
+            "y",
+            "True",
+        }
+        use_sparsity_flag = str(use_sparsity).strip().lower() in {
+            "true",
+            "1",
+            "yes",
+            "y",
+            "True",
+        }
 
         if use_sparsity_flag and sparsity_ratio > 0:
             self.add_sparsity(sparsity_type, sparsity_ratio)
@@ -267,7 +301,9 @@ class Predictor(BasePredictor):
             decoded = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
             input_length = inputs['input_ids'].shape[1]
             generated_tokens = outputs[0][input_length:]
-            generated_text = self.processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            generated_text = self.processor.tokenizer.decode(
+                generated_tokens, skip_special_tokens=True
+            )
             final_output = generated_text.strip() if generated_text.strip() else decoded
         except Exception as e:
             print(f"Decoding error: {e}")

@@ -3,8 +3,7 @@ from pathlib import Path
 
 import torch
 from cog import BasePredictor, Input  # DO NOT import Path from cog (shadowing)
-
-from pruna import SmashConfig, smash   # or pruna, whichever is correct in your env
+from pruna import SmashConfig, smash  # or pruna, whichever is correct in your env
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -60,18 +59,17 @@ class Predictor(BasePredictor):
     ) -> Path:
         """Run a single prediction on the text generation model."""
 
-
         # Validate lengths
         max_input_length = max(1, self.cache_length - max_new_tokens)
 
         messages = [
-        {"role": "system", "content": f"/{mode}"},
-        {"role": "user", "content": prompt},
+            {"role": "system", "content": f"/{mode}"},
+            {"role": "user", "content": prompt},
         ]
         text = self.tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
         )
 
         # Tokenize and move tensors to CUDA
@@ -89,18 +87,16 @@ class Predictor(BasePredictor):
 
         # Generate
         with torch.no_grad():
-                output_ids = self.smashed_text_model.generate(
-                    inputs["input_ids"],
-                    max_new_tokens=max_new_tokens,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id, 
-                )
+            output_ids = self.smashed_text_model.generate(
+                inputs["input_ids"],
+                max_new_tokens=max_new_tokens,
+                pad_token_id=self.tokenizer.eos_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+            )
 
         # Decode only the newly generated tokens
         start_idx = inputs["input_ids"].shape[1]
-        generated_text = self.tokenizer.decode(
-            output_ids[0][start_idx:], skip_special_tokens=True
-        )
+        generated_text = self.tokenizer.decode(output_ids[0][start_idx:], skip_special_tokens=True)
 
         full_output = prompt + generated_text
         print(full_output)
