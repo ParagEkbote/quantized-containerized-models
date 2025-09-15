@@ -5,11 +5,6 @@ from io import BytesIO
 from pathlib import Path
 
 import requests
-from io import BytesIO
-from pathlib import Path as SysPath
-
-import requests
-from datetime import datetime
 import torch
 import torch.nn as nn
 from cog import BasePredictor, Input
@@ -30,30 +25,41 @@ else:
     raise ValueError("HF_TOKEN not found in .env file")
 
 
-from datetime import datetime
+# ------------------------
+# Save output utility
+# ------------------------
+def save_output_to_file(
+    text: str,
+    output_folder: Path = Path("outputs"),
+    seed: int | None = None,
+    index: int | str | None = None,
+    filename: str | None = None,
+) -> Path:
+    """
+    Save text to a file inside the given output folder.
+    - If filename is provided, use that.
+    - Else, generate one with seed and index if provided.
+    - If neither provided, fall back to a timestamp-based filename.
+    """
+    output_folder.mkdir(parents=True, exist_ok=True)
 
-def save_output_to_file(text: str, filename: str | None = None) -> str:
-    """
-    Save text to a file in the current working directory.
-    If filename is not provided, it generates one with a timestamp.
-    """
-    if filename is None:
+    if filename is not None:
+        output_path = output_folder / filename
+    elif seed is not None and index is not None:
+        output_path = output_folder / f"output_{seed}_{index}.txt"
+    else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"output_{timestamp}.txt"
-    
-    file_path = SysPath(filename)  # no folder, directly current working directory
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    
-    return str(file_path)
+        output_path = output_folder / f"output_{timestamp}.txt"
 
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    return output_path
 
 
 # ------------------------
 # Safe sparsity utilities
 # ------------------------
-
-
 def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
     if not isinstance(module, nn.Linear):
         return False
@@ -80,12 +86,11 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
                 weight = module.weight.data
                 flat_weights = weight.abs().flatten().float()
                 try:
-                    # Top-k safe pruning for large tensors
                     k = int(flat_weights.numel() * (1 - sparsity_ratio))
                     if k == 0:
                         continue
                     topk_vals, _ = torch.topk(flat_weights, k)
-                    threshold = topk_vals[-1]  # smallest value in top-k
+                    threshold = topk_vals[-1]
                     mask = weight.abs() >= threshold
                     weight.mul_(mask)
                     module.register_buffer('sparse_mask', mask)
@@ -95,7 +100,6 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
                     print(f"Layer {name}: Skipping sparsity due to large tensor ({e})")
 
 
-def structured_pruning(model, channels_to_remove=0.25):
 def gradual_magnitude_pruning(
     model,
     target_sparsity: float = 0.5,
@@ -103,9 +107,7 @@ def gradual_magnitude_pruning(
     total_steps: int = 1000,
     filter_fn=None,
 ):
-    """Gradually increase sparsity over steps, applying filter_fn if provided."""
     current_sparsity = target_sparsity * min(current_step / total_steps, 1.0)
-
     print(f"\n[Pruning Step {current_step}/{total_steps}] Target sparsity: {current_sparsity:.2%}")
 
     for name, module in model.named_modules():
@@ -119,17 +121,15 @@ def gradual_magnitude_pruning(
                 mask = weight.abs() >= threshold[-1]
                 num_pruned = weight.numel() - mask.sum().item()
                 weight *= mask.view_as(weight)
-                print(f"Layer '{name}': pruned {num_pruned}/{weight.numel()} weights "
-                      f"({num_pruned / weight.numel():.2%})")
+                print(
+                    f"Layer '{name}': pruned {num_pruned}/{weight.numel()} weights "
+                    f"({num_pruned / weight.numel():.2%})"
+                )
 
     return current_sparsity
 
 
 def structured_pruning_safe(model, sparsity_ratio=0.10, filter_fn=None):
-    """
-    Least-breaking structured sparsity: zero out the least important channels
-    instead of actually removing them, so layer shapes remain intact.
-    """
     total_zeros = 0
     total_params = 0
 
@@ -141,12 +141,11 @@ def structured_pruning_safe(model, sparsity_ratio=0.10, filter_fn=None):
             total_params += weight.numel()
 
             if len(weight.shape) > 1:
-                # L2 norm per output channel
                 channel_importance = weight.norm(dim=1)
                 num_zero = int(weight.shape[0] * sparsity_ratio)
                 if num_zero > 0:
                     _, indices_to_zero = torch.topk(channel_importance, num_zero, largest=False)
-                    weight[indices_to_zero] = 0.0  # zero-out least important channels
+                    weight[indices_to_zero] = 0.0
                     total_zeros += num_zero * weight.shape[1]
                     print(f"Layer {name}: Zeroed {num_zero}/{weight.shape[0]} channels")
 
@@ -212,12 +211,14 @@ def format_chat_messages(prompt: str, image_url: str | None = None):
     return messages
 
 
+# ------------------------
+# Predictor
+# ------------------------
 class Predictor(BasePredictor):
     def setup(self):
-
-        torch.backends.cuda.matmul.allow_tf32 = True          # enable TensorFloat32 for matmul on Ampere+ GPUs
-        torch.backends.cudnn.benchmark = True                # auto-tune cuDNN for better performance
-        torch.backends.cudnn.allow_tf32 = True               # enable TF32 for cuDNN convs
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.allow_tf32 = True
         MODEL_ID = "google/gemma-3-4b-it"
         self.processor = AutoProcessor.from_pretrained(MODEL_ID)
         self.model = AutoModelForImageTextToText.from_pretrained(
@@ -237,15 +238,11 @@ class Predictor(BasePredictor):
 
         if hasattr(self.model.language_model, "embed_tokens"):
             self.model.language_model.embed_tokens = torch.compile(
-            self.model.language_model.embed_tokens
-        )
-        print("Embed tokens layer compiled successfully",flush=True)
-
-    # Compile the LM head
+                self.model.language_model.embed_tokens
+            )
         if hasattr(self.model, "lm_head"):
             self.model.lm_head = torch.compile(self.model.lm_head)
-        print("LM head layer compiled successfully",flush=True)
-    
+
     def predict(
         self,
         prompt: str = Input(description="Input text prompt"),
@@ -254,10 +251,7 @@ class Predictor(BasePredictor):
             default=128, ge=1, le=2500, description="Maximum number of new tokens"
         ),
         temperature: float = Input(
-            default=0.7,
-            description="Sampling temperature",
-            ge=0.0,
-            le=2.0,
+            default=0.7, description="Sampling temperature", ge=0.0, le=2.0
         ),
         top_p: float = Input(default=0.9, description="Top-p nucleus sampling", ge=0.0, le=1.0),
         seed: int = Input(default=42, description="Seed for reproducibility"),
@@ -270,20 +264,8 @@ class Predictor(BasePredictor):
     ) -> str:
         torch.manual_seed(seed)
 
-        use_quantization_flag = str(use_quantization).strip().lower() in {
-            "true",
-            "1",
-            "yes",
-            "y",
-            "True",
-        }
-        use_sparsity_flag = str(use_sparsity).strip().lower() in {
-            "true",
-            "1",
-            "yes",
-            "y",
-            "True",
-        }
+        use_quantization_flag = str(use_quantization).strip().lower() in {"true", "1", "yes", "y"}
+        use_sparsity_flag = str(use_sparsity).strip().lower() in {"true", "1", "yes", "y"}
 
         if use_sparsity_flag and sparsity_ratio > 0:
             self.add_sparsity(sparsity_type, sparsity_ratio)
@@ -305,7 +287,6 @@ class Predictor(BasePredictor):
                 print(f"Image loaded successfully from {image_url}")
             except Exception as e:
                 print(f"Warning: Failed to load image from {image_url}: {e}")
-                image = None
 
         messages = format_chat_messages(prompt, image_url if image else None)
         try:
@@ -363,7 +344,7 @@ class Predictor(BasePredictor):
             final_output = str(outputs)
 
         try:
-            file_path = save_output_to_file(final_output)
+            file_path = save_output_to_file(final_output, seed=seed, index=0)
             print(f"Saved output persistently to {file_path}")
         except Exception as e:
             print(f"Warning: Could not save output to file: {e}")
