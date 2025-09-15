@@ -5,6 +5,11 @@ from io import BytesIO
 from pathlib import Path
 
 import requests
+from io import BytesIO
+from pathlib import Path as SysPath
+
+import requests
+from datetime import datetime
 import torch
 import torch.nn as nn
 from cog import BasePredictor, Input
@@ -25,18 +30,47 @@ else:
     raise ValueError("HF_TOKEN not found in .env file")
 
 
-def save_output_to_file(output_folder: Path, seed: int, index: int | str, text: str) -> Path:
-    """Save the generated text to disk as a .txt file."""
-    output_path = output_folder / f"output_{seed}_{index}.txt"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
+from datetime import datetime
+
+def save_output_to_file(text: str, filename: str | None = None) -> str:
+    """
+    Save text to a file in the current working directory.
+    If filename is not provided, it generates one with a timestamp.
+    """
+    if filename is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"output_{timestamp}.txt"
+    
+    file_path = SysPath(filename)  # no folder, directly current working directory
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(text)
-    return output_path
+    
+    return str(file_path)
+
 
 
 # ------------------------
 # Safe sparsity utilities
 # ------------------------
+
+
+def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
+    if not isinstance(module, nn.Linear):
+        return False
+    name = full_name.lower()
+    if any(skip in name for skip in ["embed", "lm_head", "output", "norm", "layernorm"]):
+        return False
+    target_layers = [
+        "self_attn.q_proj",
+        "self_attn.k_proj",
+        "self_attn.v_proj",
+        "mlp.gate_proj",
+        "mlp.up_proj",
+        "mlp.down_proj",
+    ]
+    return any(target in name for target in target_layers)
+
+
 def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
     with torch.no_grad():
         for name, module in model.named_modules():
@@ -62,46 +96,36 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
 
 
 def structured_pruning(model, channels_to_remove=0.25):
+def gradual_magnitude_pruning(
+    model,
+    target_sparsity: float = 0.5,
+    current_step: int = 10,
+    total_steps: int = 1000,
+    filter_fn=None,
+):
+    """Gradually increase sparsity over steps, applying filter_fn if provided."""
+    current_sparsity = target_sparsity * min(current_step / total_steps, 1.0)
+
+    print(f"\n[Pruning Step {current_step}/{total_steps}] Target sparsity: {current_sparsity:.2%}")
+
     for name, module in model.named_modules():
+        if filter_fn and not filter_fn(module, name):
+            continue
         if isinstance(module, nn.Linear):
             weight = module.weight.data
-            if len(weight.shape) > 1:
-                channel_importance = weight.float().norm(dim=1)
-                num_remove = int(weight.shape[0] * channels_to_remove)
-                if num_remove > 0:
-                    _, indices_to_remove = torch.topk(
-                        channel_importance, num_remove, largest=False
-                    )
-                    keep_mask = torch.ones(weight.shape[0], dtype=torch.bool, device=weight.device)
-                    keep_mask[indices_to_remove] = False
-                    new_weight = weight[keep_mask]
-                    print(f"Layer {name}: Removed {num_remove}/{weight.shape[0]} channels")
+            k = int(weight.numel() * current_sparsity)
+            if k > 0:
+                threshold, _ = torch.topk(weight.abs().view(-1), k, largest=False)
+                mask = weight.abs() >= threshold[-1]
+                num_pruned = weight.numel() - mask.sum().item()
+                weight *= mask.view_as(weight)
+                print(f"Layer '{name}': pruned {num_pruned}/{weight.numel()} weights "
+                      f"({num_pruned / weight.numel():.2%})")
 
-
-def gradual_magnitude_pruning(model, target_sparsity=0.5, current_step=0, total_steps=1000):
-    current_sparsity = target_sparsity * min(current_step / total_steps, 1.0)
-    magnitude_based_pruning(model, current_sparsity)
     return current_sparsity
 
 
-def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
-    if not isinstance(module, nn.Linear):
-        return False
-    name = full_name.lower()
-    if any(skip in name for skip in ["embed", "lm_head", "output", "norm", "layernorm"]):
-        return False
-    target_layers = [
-        "self_attn.q_proj",
-        "self_attn.k_proj",
-        "self_attn.v_proj",
-        "mlp.gate_proj",
-        "mlp.up_proj",
-        "mlp.down_proj",
-    ]
-    return any(target in name for target in target_layers)
-
-
-def structured_pruning_safe(model, sparsity_ratio=0.10):
+def structured_pruning_safe(model, sparsity_ratio=0.10, filter_fn=None):
     """
     Least-breaking structured sparsity: zero out the least important channels
     instead of actually removing them, so layer shapes remain intact.
@@ -110,6 +134,8 @@ def structured_pruning_safe(model, sparsity_ratio=0.10):
     total_params = 0
 
     for name, module in model.named_modules():
+        if filter_fn and not filter_fn(module, name):
+            continue
         if isinstance(module, nn.Linear):
             weight = module.weight.data
             total_params += weight.numel()
@@ -121,7 +147,7 @@ def structured_pruning_safe(model, sparsity_ratio=0.10):
                 if num_zero > 0:
                     _, indices_to_zero = torch.topk(channel_importance, num_zero, largest=False)
                     weight[indices_to_zero] = 0.0  # zero-out least important channels
-                    total_zeros += num_zero * weight.shape[1]  # count zeros
+                    total_zeros += num_zero * weight.shape[1]
                     print(f"Layer {name}: Zeroed {num_zero}/{weight.shape[0]} channels")
 
     overall_sparsity = total_zeros / total_params
@@ -132,11 +158,18 @@ def structured_pruning_safe(model, sparsity_ratio=0.10):
 def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
     print(f"Applying {sparsity_type} sparsity with ratio {sparsity_ratio}")
     if sparsity_type == "magnitude":
-        magnitude_based_pruning(model, sparsity_ratio, gemma_filter_fn)
+        magnitude_based_pruning(model, sparsity_ratio, filter_fn=gemma_filter_fn)
     elif sparsity_type == "structured":
-        structured_pruning_safe(model, sparsity_ratio, gemma_filter_fn)
+        structured_pruning_safe(model, sparsity_ratio, filter_fn=gemma_filter_fn)
     elif sparsity_type == "gradual":
-        gradual_magnitude_pruning(model, sparsity_ratio, gemma_filter_fn)
+        gradual_magnitude_pruning(
+            model,
+            target_sparsity=sparsity_ratio,
+            current_step=0,
+            total_steps=1000,
+            filter_fn=gemma_filter_fn,
+        )
+
     total_params = sum(p.numel() for p in model.parameters())
     sparse_params = sum((p == 0).sum().item() for p in model.parameters())
     overall_sparsity = sparse_params / total_params
@@ -181,6 +214,10 @@ def format_chat_messages(prompt: str, image_url: str | None = None):
 
 class Predictor(BasePredictor):
     def setup(self):
+
+        torch.backends.cuda.matmul.allow_tf32 = True          # enable TensorFloat32 for matmul on Ampere+ GPUs
+        torch.backends.cudnn.benchmark = True                # auto-tune cuDNN for better performance
+        torch.backends.cudnn.allow_tf32 = True               # enable TF32 for cuDNN convs
         MODEL_ID = "google/gemma-3-4b-it"
         self.processor = AutoProcessor.from_pretrained(MODEL_ID)
         self.model = AutoModelForImageTextToText.from_pretrained(
@@ -198,6 +235,17 @@ class Predictor(BasePredictor):
                 print(f"Warning: Sparsity application failed: {e}")
                 print("Continuing without sparsity...")
 
+        if hasattr(self.model.language_model, "embed_tokens"):
+            self.model.language_model.embed_tokens = torch.compile(
+            self.model.language_model.embed_tokens
+        )
+        print("Embed tokens layer compiled successfully",flush=True)
+
+    # Compile the LM head
+        if hasattr(self.model, "lm_head"):
+            self.model.lm_head = torch.compile(self.model.lm_head)
+        print("LM head layer compiled successfully",flush=True)
+    
     def predict(
         self,
         prompt: str = Input(description="Input text prompt"),
@@ -205,8 +253,13 @@ class Predictor(BasePredictor):
         max_new_tokens: int = Input(
             default=128, ge=1, le=2500, description="Maximum number of new tokens"
         ),
-        temperature: float = Input(default=0.7, description="Sampling temperature"),
-        top_p: float = Input(default=0.9, description="Top-p nucleus sampling"),
+        temperature: float = Input(
+            default=0.7,
+            description="Sampling temperature",
+            ge=0.0,
+            le=2.0,
+        ),
+        top_p: float = Input(default=0.9, description="Top-p nucleus sampling", ge=0.0, le=1.0),
         seed: int = Input(default=42, description="Seed for reproducibility"),
         use_quantization: str = Input(
             default="true", description="Enable INT8 quantization using torchao"
@@ -310,8 +363,8 @@ class Predictor(BasePredictor):
             final_output = str(outputs)
 
         try:
-            filename = save_output_to_file(final_output)
-            print(f"Output saved to {filename}")
+            file_path = save_output_to_file(final_output)
+            print(f"Saved output persistently to {file_path}")
         except Exception as e:
             print(f"Warning: Could not save output to file: {e}")
 

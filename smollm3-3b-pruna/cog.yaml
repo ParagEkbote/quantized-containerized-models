@@ -10,6 +10,7 @@ build:
   python_version: "3.11"
   run:
     # Clear apt cache and update with retries
+    - command: pip install uv
     - command: apt-get clean && rm -rf /var/lib/apt/lists/*
     - command: apt-get update --fix-missing || apt-get update --fix-missing || apt-get update
     # Install uv (precompiled binary, faster than pip)

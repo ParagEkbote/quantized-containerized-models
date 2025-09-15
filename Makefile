@@ -1,0 +1,42 @@
+# Makefile for Cog CLI setup, model build, and deployment
+
+COG_BIN       ?= /usr/local/bin/cog
+COG_URL       := https://github.com/replicate/cog/releases/latest/download/cog_$(shell uname -s)_$(shell uname -m)
+MODEL_DIR  := $(CURDIR)
+MODEL_NAME := $(notdir $(MODEL_DIR))
+USERNAME      ?= paragekbote
+
+.PHONY: install build login deploy help
+
+install:
+	@echo "🔧 Installing Cog CLI to $(COG_BIN)..."
+	sudo curl -sSL -o $(COG_BIN) "$(COG_URL)"
+	sudo chmod +x $(COG_BIN)
+	@echo "✅ Cog installed at $(COG_BIN)"
+
+build:
+	@echo "📦 Building Cog image for model: $(MODEL_NAME)..."
+	cd $(MODEL_DIR) && $(COG_BIN) build -t $(MODEL_NAME)
+	@echo "✅ Build complete for $(MODEL_NAME)"
+
+login:
+	@echo "🔐 Logging into Cog..."
+	$(COG_BIN) login
+	@echo "✅ Login successful."
+
+deploy:
+	@if ! $(COG_BIN) whoami >/dev/null 2>&1; then \
+		echo "🔑 Not logged in. Running cog login..."; \
+		$(COG_BIN) login; \
+	fi
+	@echo "🚀 Deploying model to r8.im/$(USERNAME)/$(MODEL_NAME)..."
+	cd $(MODEL_DIR) && $(COG_BIN) push r8.im/$(USERNAME)/$(MODEL_NAME)
+	@echo "✅ Model pushed to r8.im/$(USERNAME)/$(MODEL_NAME)"
+
+help:
+	@echo "🛠️  Cog Makefile Commands:"
+	@echo "  make install           # Install Cog CLI"
+	@echo "  make build             # Build Cog image from current folder"
+	@echo "  make login             # Authenticate with Cog"
+	@echo "  make deploy            # Push model to Replicate"
+	@echo "  MODEL_DIR=path/to/model-folder make build/deploy  # Use specific folder"

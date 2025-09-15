@@ -12,7 +12,7 @@ build:
     - command: apt-get update && apt-get install -y git
     - command: apt-get clean && rm -rf /var/lib/apt/lists/*
     # Install uv (binary, faster than pip)
-    - command: curl -LsSf https://astral.sh/uv/install.sh | sh
+    - command: pip install uv
     # Install Python deps with uv into system Python
     - command: uv pip install --system packaging wheel ninja cmake torch
     - command: uv pip install --system -U flash-attn --no-build-isolation
