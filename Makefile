@@ -1,17 +1,25 @@
 # Makefile for Cog CLI setup, model build, and deployment
 
+# Default global install path, can override with `make COG_BIN=./bin/cog install`
 COG_BIN       ?= /usr/local/bin/cog
 COG_URL       := https://github.com/replicate/cog/releases/latest/download/cog_$(shell uname -s)_$(shell uname -m)
-MODEL_DIR  := $(CURDIR)
-MODEL_NAME := $(notdir $(MODEL_DIR))
+MODEL_DIR     := $(CURDIR)
+MODEL_NAME    := $(notdir $(MODEL_DIR))
 USERNAME      ?= paragekbote
 
 .PHONY: install build login deploy help
 
 install:
 	@echo "🔧 Installing Cog CLI to $(COG_BIN)..."
-	sudo curl -sSL -o $(COG_BIN) "$(COG_URL)"
-	sudo chmod +x $(COG_BIN)
+	@if [ "$(COG_BIN)" = "/usr/local/bin/cog" ]; then \
+		sudo curl -sSL -o $(COG_BIN) "$(COG_URL)"; \
+		sudo chmod +x $(COG_BIN); \
+	else \
+		mkdir -p $(dir $(COG_BIN)); \
+		curl -sSL -o $(COG_BIN) "$(COG_URL)"; \
+		chmod +x $(COG_BIN); \
+		echo "👉 Add '$(dir $(COG_BIN))' to your PATH"; \
+	fi
 	@echo "✅ Cog installed at $(COG_BIN)"
 
 build:
@@ -35,7 +43,8 @@ deploy:
 
 help:
 	@echo "🛠️  Cog Makefile Commands:"
-	@echo "  make install           # Install Cog CLI"
+	@echo "  make install           # Install Cog CLI (global by default)"
+	@echo "  make COG_BIN=./bin/cog install   # Install Cog CLI locally"
 	@echo "  make build             # Build Cog image from current folder"
 	@echo "  make login             # Authenticate with Cog"
 	@echo "  make deploy            # Push model to Replicate"
