@@ -1,0 +1,1 @@
+Okay, let's break down sparsity and quantization, two powerful techniques often used together in the world of machine learning, particularly with neural networks.  They'
