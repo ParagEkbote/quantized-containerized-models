@@ -7,7 +7,7 @@ from pathlib import Path
 import requests
 import torch
 import torch.nn as nn
-from cog import BasePredictor, Input, Path as CogPath
+from cog import BasePredictor, Input
 from dotenv import load_dotenv
 from huggingface_hub import login
 from PIL import Image
@@ -268,7 +268,7 @@ class Predictor(BasePredictor):
         torch.backends.cudnn.allow_tf32 = True
 
         MODEL_ID = "google/gemma-3-4b-it"
-        self.processor = AutoProcessor.from_pretrained(MODEL_ID, use_fast=False)
+        self.processor = AutoProcessor.from_pretrained(MODEL_ID, use_fast=True)
         self.model = AutoModelForImageTextToText.from_pretrained(
             MODEL_ID,
             dtype=torch.bfloat16,
@@ -309,7 +309,7 @@ class Predictor(BasePredictor):
         ),
         use_sparsity: str = Input(default="false", description="Enable sparsity optimization"),
         sparsity_type: str = Input(
-            default="magnitude", description="Type of sparsity: magnitude, gradual,layer_norm"
+            default="magnitude", description="Type of sparsity: magnitude, gradual, layer_norm"
         ),
         sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.8),
     ) -> str:

@@ -22,6 +22,7 @@ build:
         "sentencepiece>=0.1.95" \
         "protobuf>=3.20.0" \
         "requests>=2.31.0"  \
+        "torchvision"  \
         "torchao"
 
 predict: "predict.py:Predictor"
