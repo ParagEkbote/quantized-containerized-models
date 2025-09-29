@@ -42,7 +42,7 @@ class Predictor(BasePredictor):
     def setup(self):
         self.pipe = FluxImg2ImgPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             quantization_config=PipelineQuantizationConfig(
                 quant_backend="bitsandbytes_4bit",
                 quant_kwargs={

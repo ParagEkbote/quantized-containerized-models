@@ -30,7 +30,7 @@ class Predictor(BasePredictor):
         # Use device_map="auto" unless you know the exact mapping
         base_model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="cuda",
         )
 
