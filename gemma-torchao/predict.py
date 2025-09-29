@@ -189,7 +189,7 @@ def layer_norm_pruning(
 
 
 
-def apply_safe_sparsity(model, processor, sparsity_type="magnitude", sparsity_ratio=0.3):
+def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
     print(f"\nApplying {sparsity_type} sparsity with ratio {sparsity_ratio}")
     
     if sparsity_type == "magnitude":
@@ -202,7 +202,7 @@ def apply_safe_sparsity(model, processor, sparsity_type="magnitude", sparsity_ra
             total_steps=1000,
             filter_fn=gemma_filter_fn,
         )
-    elif sparsity_type == "layer_norm_prune":
+    elif sparsity_type == "layer_norm":
         layer_norm_pruning(
             model,
             sparsity_ratio=sparsity_ratio,
@@ -274,7 +274,7 @@ class Predictor(BasePredictor):
         if sparsity_ratio > 0:
             try:
                 overall_sparsity = apply_safe_sparsity(
-                    self.model, self.processor, sparsity_type, sparsity_ratio
+                    self.model, sparsity_type, sparsity_ratio
                 )
                 print(f"Successfully applied {sparsity_type} sparsity: {overall_sparsity:.2%}")
             except Exception as e:
@@ -307,7 +307,7 @@ class Predictor(BasePredictor):
         use_sparsity: str = Input(default="false", description="Enable sparsity optimization"),
         sparsity_type: str = Input(
             default="magnitude", 
-            description="Type of sparsity: magnitude, gradual, structured, output_sensitivity (fast uniform pruning)"
+            description="Type of sparsity: magnitude, gradual,layer_norm"
         ),
         sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.8),
     ) -> str:

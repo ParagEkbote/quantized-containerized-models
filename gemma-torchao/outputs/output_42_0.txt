@@ -1,1 +1,5 @@
-Okay, let's break down sparsity and quantization, two powerful techniques often used together in the world of machine learning, particularly with neural networks.  They'
+Okay, let's dive into Transformers! They've become *the* dominant architecture in the world of Artificial Intelligence, particularly in Natural Language Processing (NLP). Here's a breakdown of what they are, how they work, and why they're so impactful:
+
+**1. What are Transformers?**
+
+At their core, Transformers are a type of neural network architecture designed to handle sequential data – things that come in an order, like words in a sentence, or notes in a melody.  Before Transformers, Recurrent Neural Networks (RNNs) like LSTMs and GRUs were the go-to for sequence
