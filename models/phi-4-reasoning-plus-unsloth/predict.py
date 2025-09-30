@@ -1,9 +1,8 @@
-from unsloth import FastLanguageModel #noqa
+from unsloth import FastLanguageModel  # noqa  # isort: skip
 from pathlib import Path as SysPath
 
 import torch
 from cog import BasePredictor, Input, Path
-from unsloth import FastLanguageModel
 
 
 def save_text(output_folder: SysPath, seed: int, index: str, text: str) -> SysPath:

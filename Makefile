@@ -271,16 +271,15 @@ delete-local: ## Remove model-local cog and local images for MODEL_DIR
 	@$(MAKE) uninstall-local MODEL_DIR="$(MODEL_DIR)"
 
 .PHONY: lint
-lint: ## Run code linting checks
-	@if ! command -v $(PYTHON) >/dev/null 2>&1; then \
-		echo "$(COLOR_RED)❌ Error: Python not found$(COLOR_RESET)"; \
+lint: ## Run code linting checks via pre-commit
+	@if ! command -v pre-commit >/dev/null 2>&1; then \
+		echo "$(COLOR_RED)❌ Error: pre-commit not found$(COLOR_RESET)"; \
+		echo "$(COLOR_YELLOW)Install with: pip install pre-commit$(COLOR_RESET)"; \
 		exit 1; \
 	fi
-	@echo "$(COLOR_BLUE)🔍 Running linting checks...$(COLOR_RESET)"
-	@$(PIP) install -q flake8 2>/dev/null || true
-	@flake8 . --exclude=.git,__pycache__,build,dist --max-line-length=100 2>/dev/null || \
-		echo "$(COLOR_YELLOW)⚠️  flake8 not installed, skipping$(COLOR_RESET)"
-	@echo "$(COLOR_GREEN)✅ Linting complete$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)🔍 Running pre-commit hooks...$(COLOR_RESET)"
+	@pre-commit run --all-files
+	@echo "$(COLOR_GREEN)✅ pre-commit checks complete$(COLOR_RESET)"
 
 # ------------------------------------------------------------------------------
 # Utility Commands
