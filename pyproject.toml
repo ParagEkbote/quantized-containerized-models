@@ -1,35 +1,55 @@
 [project]
 name = "quantized-containerized-models"
-description = "A project that demonstrates how to deploy AI models with significant improvements, within containerized environments using Cog.Ideal for reproducible, scalable and hardware-efficient inference."
-version = "0.1.0"
+description = "A project that demonstrates how to deploy AI models with significant improvements, within containerized environments using Cog. Ideal for reproducible, scalable and hardware-efficient inference."
+version = "0.3.0"
 authors = [{ name = "Parag Ekbote", email = "paragekbote23@gmail.com" }]
 readme = "README.md"
 license = { text = "Apache 2.0" }
 requires-python = ">=3.10"
 
+# ===== Core runtime dependencies =====
 dependencies = [
     "torch>=2.1.0",
     "transformers>=4.36.0",
     "diffusers>=0.30.0",
     "pruna>=0.1.1",
-    "pillow",
+    "pillow>=11.3.0",
     "IPython",
     "colorama",
     "unsloth",
     "unsloth_zoo",
-    "pre-commit",
-    "pytest",
     "torchao",
     "python-dotenv==1.1.1",
     "accelerate>=1.8.0",
     "bitsandbytes>=0.45.0",
     "requests>=2.31.0",
     "protobuf>=3.20.0",
-    "huggingface-hub[hf-xet]",
+    "huggingface-hub[hf-xet]"
+]
+
+# ===== Optional dependency groups =====
+[project.optional-dependencies]
+lint = [
     "black",
     "flake8",
     "isort",
+    "ty"
 ]
+
+test = [
+    "pre-commit",
+    "pytest"
+]
+
+fa_build = [
+    "flash-attn",
+    "cmake",
+    "ninja",
+    "wheel"
+]
+
+[tool.ty.rules]
+unresolved-import = "ignore"
 
 [tool.black]
 line-length = 99
@@ -41,21 +61,6 @@ profile = "black"
 line_length = 99
 combine_as_imports = true
 
-[tool.mypy]
-python_version = "3.10"
-ignore_missing_imports = true
-show_column_numbers = true
-pretty = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-disallow_untyped_defs = false
-exclude = [
-    "build/",
-    "dist/",
-    ".*_test.py", # optional: ignore test files
-]
-
-# Optional: if you use flake8 with a plugin that reads pyproject.toml
 [tool.flake8]
 max-line-length = 99
 extend-ignore = ["D204", "D401", "E203", "W503"]
