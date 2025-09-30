@@ -1,0 +1,16 @@
+{
+  "source_directories": [
+    "."
+  ],
+  "search_path": [
+    "."
+  ],
+  "typeshed": "~/.pyre/typeshed",
+  "version": "latest",
+  "exclude": [
+    "venv",
+    "__pycache__",
+    "build",
+    "dist"
+  ]
+}
