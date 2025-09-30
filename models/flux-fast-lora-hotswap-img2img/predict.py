@@ -29,7 +29,7 @@ def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
 
 
 def load_image(init_image: str) -> Image.Image:
-    """Load an image from either a URL or a local file path."""
+    """Load an image from a URL."""
     if init_image.startswith("http://") or init_image.startswith("https://"):
         resp = requests.get(init_image, timeout=30)
         resp.raise_for_status()
@@ -42,7 +42,7 @@ class Predictor(BasePredictor):
     def setup(self):
         self.pipe = FluxImg2ImgPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             quantization_config=PipelineQuantizationConfig(
                 quant_backend="bitsandbytes_4bit",
                 quant_kwargs={

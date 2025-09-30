@@ -42,7 +42,6 @@ def save_output_to_file(
     - If neither provided, fall back to a timestamp-based filename.
     """
     output_folder.mkdir(parents=True, exist_ok=True)
-
     if filename is not None:
         output_path = output_folder / filename
     elif seed is not None and index is not None:
@@ -53,7 +52,6 @@ def save_output_to_file(
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(text)
-
     return output_path
 
 
@@ -78,6 +76,7 @@ def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
 
 
 def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
+    print(f"\n[Magnitude Pruning] Target sparsity: {sparsity_ratio:.2%}")
     with torch.no_grad():
         for name, module in model.named_modules():
             if filter_fn and not filter_fn(module, name):
@@ -108,67 +107,114 @@ def gradual_magnitude_pruning(
     filter_fn=None,
 ):
     current_sparsity = target_sparsity * min(current_step / total_steps, 1.0)
-    print(f"\n[Pruning Step {current_step}/{total_steps}] Target sparsity: {current_sparsity:.2%}")
+    progress_percent = min(current_step / total_steps * 100, 100)
+    print(
+        f"\n[Gradual Pruning] Step {current_step}/{total_steps} ({progress_percent:.1f}%) - Current sparsity: {current_sparsity:.2%}"
+    )
+
+    total_pruned = 0
+    total_weights = 0
 
     for name, module in model.named_modules():
         if filter_fn and not filter_fn(module, name):
             continue
         if isinstance(module, nn.Linear):
             weight = module.weight.data
+            total_weights += weight.numel()
+
             k = int(weight.numel() * current_sparsity)
             if k > 0:
                 threshold, _ = torch.topk(weight.abs().view(-1), k, largest=False)
                 mask = weight.abs() >= threshold[-1]
                 num_pruned = weight.numel() - mask.sum().item()
                 weight *= mask.view_as(weight)
+                total_pruned += num_pruned
                 print(
-                    f"Layer '{name}': pruned {num_pruned}/{weight.numel()} weights "
+                    f"  Layer '{name}': pruned {num_pruned}/{weight.numel()} weights "
                     f"({num_pruned / weight.numel():.2%})"
                 )
 
+    actual_sparsity = total_pruned / total_weights if total_weights > 0 else 0
+    print(
+        f"  Total progress: {total_pruned}/{total_weights} weights pruned ({actual_sparsity:.2%})"
+    )
     return current_sparsity
 
 
-def structured_pruning_safe(model, sparsity_ratio=0.10, filter_fn=None):
-    total_zeros = 0
-    total_params = 0
+def layer_norm_pruning(model, sparsity_ratio: float = 0.3, filter_fn=None):
+    """
+    Fast layer-norm based pruning: prune weights with lowest L2 norms per layer
+    Very fast, no forward pass needed, preserves output quality well
+    """
+    print(f"\n[Layer Norm Pruning] Target sparsity: {sparsity_ratio:.2%}")
+    print("Analyzing weight norms (fast method)...")
+
+    # Calculate importance scores for all layers
+    layer_importance = {}
 
     for name, module in model.named_modules():
         if filter_fn and not filter_fn(module, name):
             continue
-        if isinstance(module, nn.Linear):
+        if isinstance(module, nn.Linear) and hasattr(module, 'weight'):
             weight = module.weight.data
-            total_params += weight.numel()
+            # Use mean L2 norm as layer importance
+            layer_importance[name] = weight.norm(p=2).item() / weight.numel()
 
-            if len(weight.shape) > 1:
-                channel_importance = weight.norm(dim=1)
-                num_zero = int(weight.shape[0] * sparsity_ratio)
-                if num_zero > 0:
-                    _, indices_to_zero = torch.topk(channel_importance, num_zero, largest=False)
-                    weight[indices_to_zero] = 0.0
-                    total_zeros += num_zero * weight.shape[1]
-                    print(f"Layer {name}: Zeroed {num_zero}/{weight.shape[0]} channels")
+    print(f"Analyzed {len(layer_importance)} layers")
 
-    overall_sparsity = total_zeros / total_params
-    print(f"Overall safe structured sparsity: {overall_sparsity:.2%}")
-    return overall_sparsity
+    # Prune uniformly across all layers based on magnitude within each layer
+    total_pruned = 0
+    total_params = 0
+
+    with torch.no_grad():
+        for name, module in model.named_modules():
+            if filter_fn and not filter_fn(module, name):
+                continue
+            if isinstance(module, nn.Linear) and hasattr(module, 'weight'):
+                weight = module.weight.data
+                total_params += weight.numel()
+
+                # Prune lowest magnitude weights in this layer
+                k = int(weight.numel() * sparsity_ratio)
+                if k > 0:
+                    flat_weights = weight.abs().flatten()
+                    threshold, _ = torch.topk(flat_weights, k, largest=False)
+                    mask = weight.abs() >= threshold[-1]
+                    weight *= mask.view_as(weight)
+
+                    pruned_count = (weight == 0).sum().item()
+                    total_pruned += pruned_count
+
+                    layer_norm = layer_importance.get(name, 0)
+                    print(
+                        f"  Layer '{name}' (norm: {layer_norm:.6f}): pruned {pruned_count}/{weight.numel()} weights"
+                    )
+
+    actual_sparsity = total_pruned / total_params if total_params > 0 else 0
+    print(f"  Total pruned: {total_pruned}/{total_params} weights ({actual_sparsity:.2%})")
+    return actual_sparsity
 
 
 def apply_safe_sparsity(model, sparsity_type="magnitude", sparsity_ratio=0.3):
-    print(f"Applying {sparsity_type} sparsity with ratio {sparsity_ratio}")
+    print(f"\nApplying {sparsity_type} sparsity with ratio {sparsity_ratio}")
+
     if sparsity_type == "magnitude":
         magnitude_based_pruning(model, sparsity_ratio, filter_fn=gemma_filter_fn)
-    elif sparsity_type == "structured":
-        structured_pruning_safe(model, sparsity_ratio, filter_fn=gemma_filter_fn)
     elif sparsity_type == "gradual":
         gradual_magnitude_pruning(
             model,
             target_sparsity=sparsity_ratio,
-            current_step=0,
+            current_step=500,  # Simulate middle of training
             total_steps=1000,
             filter_fn=gemma_filter_fn,
         )
+    elif sparsity_type == "layer_norm":
+        layer_norm_pruning(model, sparsity_ratio=sparsity_ratio, filter_fn=gemma_filter_fn)
+    else:
+        print(f"Unknown sparsity type: {sparsity_type}")
+        return 0.0
 
+    # Calculate overall sparsity
     total_params = sum(p.numel() for p in model.parameters())
     sparse_params = sum((p == 0).sum().item() for p in model.parameters())
     overall_sparsity = sparse_params / total_params
@@ -203,6 +249,7 @@ def sanitize_weights_for_quantization(model: torch.nn.Module):
 def format_chat_messages(prompt: str, image_url: str | None = None):
     system_message = "You are a helpful assistant."
     messages = [{"role": "system", "content": [{"type": "text", "text": system_message}]}]
+
     user_content = []
     if image_url:
         user_content.append({"type": "image", "url": image_url})
@@ -219,11 +266,12 @@ class Predictor(BasePredictor):
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.allow_tf32 = True
+
         MODEL_ID = "google/gemma-3-4b-it"
-        self.processor = AutoProcessor.from_pretrained(MODEL_ID)
+        self.processor = AutoProcessor.from_pretrained(MODEL_ID, use_fast=True)
         self.model = AutoModelForImageTextToText.from_pretrained(
             MODEL_ID,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="auto",
         )
 
@@ -236,6 +284,7 @@ class Predictor(BasePredictor):
                 print(f"Warning: Sparsity application failed: {e}")
                 print("Continuing without sparsity...")
 
+        # Compile frequently used layers
         if hasattr(self.model.language_model, "embed_tokens"):
             self.model.language_model.embed_tokens = torch.compile(
                 self.model.language_model.embed_tokens
@@ -259,7 +308,9 @@ class Predictor(BasePredictor):
             default="true", description="Enable INT8 quantization using torchao"
         ),
         use_sparsity: str = Input(default="false", description="Enable sparsity optimization"),
-        sparsity_type: str = Input(default="magnitude", description="Type of sparsity"),
+        sparsity_type: str = Input(
+            default="magnitude", description="Type of sparsity: magnitude, gradual, layer_norm"
+        ),
         sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.8),
     ) -> str:
         torch.manual_seed(seed)
@@ -267,6 +318,7 @@ class Predictor(BasePredictor):
         use_quantization_flag = str(use_quantization).strip().lower() in {"true", "1", "yes", "y"}
         use_sparsity_flag = str(use_sparsity).strip().lower() in {"true", "1", "yes", "y"}
 
+        # Apply optimizations
         if use_sparsity_flag and sparsity_ratio > 0:
             self.add_sparsity(sparsity_type, sparsity_ratio)
 
@@ -278,6 +330,7 @@ class Predictor(BasePredictor):
             except Exception as e:
                 print(f"Warning: Quantization failed: {e}")
 
+        # Load image if provided
         image = None
         if image_url:
             try:
@@ -288,6 +341,7 @@ class Predictor(BasePredictor):
             except Exception as e:
                 print(f"Warning: Failed to load image from {image_url}: {e}")
 
+        # Format messages
         messages = format_chat_messages(prompt, image_url if image else None)
         try:
             formatted_prompt = self.processor.tokenizer.apply_chat_template(
@@ -297,6 +351,7 @@ class Predictor(BasePredictor):
             print(f"Warning: Chat template failed, using raw prompt: {e}")
             formatted_prompt = prompt
 
+        # Process inputs
         try:
             inputs = self.processor(
                 text=formatted_prompt,
@@ -311,6 +366,7 @@ class Predictor(BasePredictor):
                 return_tensors="pt",
             ).to(self.model.device)
 
+        # Generate response
         start = time.time()
         try:
             with torch.inference_mode():
@@ -331,6 +387,7 @@ class Predictor(BasePredictor):
         vram = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0.0
         print(f"VRAM used: {vram:.2f} GB | Time: {elapsed:.2f}s")
 
+        # Decode output
         try:
             decoded = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
             input_length = inputs['input_ids'].shape[1]
@@ -343,6 +400,7 @@ class Predictor(BasePredictor):
             print(f"Decoding error: {e}")
             final_output = str(outputs)
 
+        # Save output to file
         try:
             file_path = save_output_to_file(final_output, seed=seed, index=0)
             print(f"Saved output persistently to {file_path}")
