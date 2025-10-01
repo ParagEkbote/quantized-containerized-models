@@ -17,6 +17,12 @@ repos:
       - id: isort
         args: ["--profile=black", "--line-length=99"]
 
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5 # You can pin to the latest stable version
+    hooks:
+      - id: bandit
+        args: ["-r", "."] # Recursively check the repo
+
   - repo: local
     hooks:
       - id: ty
