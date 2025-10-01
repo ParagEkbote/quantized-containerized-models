@@ -10,12 +10,24 @@ from dotenv import load_dotenv
 from huggingface_hub import login
 from PIL import Image
 
-load_dotenv()  # Loads HF_TOKEN from .env file
-hf_token = os.getenv("HF_TOKEN")
-if hf_token:
-    login(token=hf_token)  # Explicitly pass token to avoid interactive prompt
-else:
-    raise ValueError("HF_TOKEN not found in .env file")
+
+def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
+    """
+    Load the Hugging Face token from the environment and log in.
+
+    Args:
+        env_var (str): The environment variable name holding the token.
+
+    Raises:
+        ValueError: If the token is not found in the environment.
+    """
+    load_dotenv()  # loads variables from .env file into environment
+    hf_token: str | None = os.getenv(env_var)
+
+    if hf_token:
+        login(token=hf_token)
+    else:
+        raise ValueError(f"{env_var} not found in .env file or environment")
 
 
 def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
@@ -114,4 +126,7 @@ class Predictor(BasePredictor):
             image = self.pipe(**pipe_kwargs).images[0]
             print(f"\n[Prompt]: {prompt} | [Trigger Word]: {trigger_word}")
             print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+            return save_image(image)
+            return save_image(image)
+            return save_image(image)
             return save_image(image)
