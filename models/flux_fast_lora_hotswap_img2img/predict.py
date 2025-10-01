@@ -162,6 +162,3 @@ class Predictor(BasePredictor):
         print(f"VRAM used: {torch.cuda.memory_allocated() / 1e9:.2f} GB | Time: {elapsed:.2f}s")
 
         return save_image(output)
-        return save_image(output)
-        return save_image(output)
-        return save_image(output)
