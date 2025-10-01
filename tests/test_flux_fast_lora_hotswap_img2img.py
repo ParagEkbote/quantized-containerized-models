@@ -103,6 +103,3 @@ def test_load_image_from_url(monkeypatch):
     # Assertions
     assert isinstance(loaded_img, Image.Image)
     assert loaded_img.size == (8, 8)
-    assert loaded_img.size == (8, 8)
-    assert loaded_img.size == (8, 8)
-    assert loaded_img.size == (8, 8)

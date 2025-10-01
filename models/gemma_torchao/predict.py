@@ -14,15 +14,27 @@ from PIL import Image
 from torchao.quantization import Int8WeightOnlyConfig, quantize_
 from transformers import AutoModelForImageTextToText, AutoProcessor
 
+
 # ------------------------
 # Hugging Face login
 # ------------------------
-load_dotenv()
-hf_token = os.getenv("HF_TOKEN")
-if hf_token:
-    login(token=hf_token)
-else:
-    raise ValueError("HF_TOKEN not found in .env file")
+def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
+    """
+    Load the Hugging Face token from the environment and log in.
+
+    Args:
+        env_var (str): The environment variable name holding the token.
+
+    Raises:
+        ValueError: If the token is not found in the environment.
+    """
+    load_dotenv()  # loads variables from .env file into environment
+    hf_token: str | None = os.getenv(env_var)
+
+    if hf_token:
+        login(token=hf_token)
+    else:
+        raise ValueError(f"{env_var} not found in .env file or environment")
 
 
 # ------------------------
@@ -407,4 +419,7 @@ class Predictor(BasePredictor):
         except Exception as e:
             print(f"Warning: Could not save output to file: {e}")
 
+        return final_output
+        return final_output
+        return final_output
         return final_output
