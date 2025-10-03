@@ -420,4 +420,3 @@ class Predictor(BasePredictor):
             print(f"Warning: Could not save output to file: {e}")
 
         return final_output
-

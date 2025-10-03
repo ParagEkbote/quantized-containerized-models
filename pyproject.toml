@@ -48,6 +48,26 @@ fa_build = [
     "wheel"
 ]
 
+# ===== Packaging (make models discoverable) =====
+[tool.setuptools]
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["models*"]
+
+# ===== Pytest settings =====
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+# ===== Linting/Formatting =====
 [tool.ty.rules]
 unresolved-import = "ignore"
 

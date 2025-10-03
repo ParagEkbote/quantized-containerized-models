@@ -127,4 +127,3 @@ class Predictor(BasePredictor):
             print(f"\n[Prompt]: {prompt} | [Trigger Word]: {trigger_word}")
             print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
             return save_image(image)
-
