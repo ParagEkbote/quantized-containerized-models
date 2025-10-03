@@ -1,12 +1,10 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 import io
-
 import pytest
 import torch
 import requests
 from PIL import Image
-
 from models.flux_fast_lora_hotswap_img2img.predict import Predictor
 import sys
 import os
@@ -98,12 +96,23 @@ class DummyPipeline:
 def predictor(monkeypatch) -> Predictor:
     """
     Returns a Predictor instance with heavy dependencies mocked.
+    
+    FIX: Temporarily patches 'pipe' onto the Predictor class to avoid 
+    AttributeError when mocking the instance attribute.
     """
+    # FIX APPLIED HERE 👇
+    # Temporarily add the 'pipe' attribute to the Predictor Class 
+    # to make sure the instance 'pred' has it and the subsequent monkeypatch 
+    # doesn't fail with an AttributeError.
+    monkeypatch.setattr(Predictor, "pipe", None, raising=False)
+    # FIX ENDS HERE 👆
+    
     pred = Predictor()
 
     # Patch the predictor's pipe
     dummy_pipe = DummyPipeline()
-    pred.pipe = dummy_pipe
+    # MODIFIED: Using monkeypatch.setattr() for the instance mock
+    monkeypatch.setattr(pred, "pipe", dummy_pipe) 
 
     # Track torch.compile calls
     pred._compile_calls = []

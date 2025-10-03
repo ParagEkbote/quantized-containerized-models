@@ -145,8 +145,16 @@ class DummyPipeline:
 
 @pytest.fixture
 def predictor(monkeypatch):
+    # --- FIX APPLIED HERE ---
+    # 1. Temporarily patch the 'pipe' attribute onto the Predictor Class.
+    # This ensures the subsequent monkeypatch on the instance will succeed.
+    monkeypatch.setattr(Predictor, "pipe", None, raising=False)
+    # --- END FIX ---
+    
     pred = Predictor()
     dummy_pipe = DummyPipeline()
+    
+    # This line now works because 'pipe' exists on the 'pred' instance.
     monkeypatch.setattr(pred, "pipe", dummy_pipe)
 
     # Track torch.compile calls
@@ -155,7 +163,9 @@ def predictor(monkeypatch):
     def mock_compile(f, **kwargs):
         compile_calls.append({'func': f, 'kwargs': kwargs})
         return f
-
+    
+    # ... (rest of the fixture)
+    
     monkeypatch.setattr(torch, "compile", mock_compile)
     pred._compile_calls = compile_calls
 
@@ -189,7 +199,7 @@ def test_predict_lora1_trigger_switches_from_lora2(predictor, capsys):
     # Start with a different adapter
     predictor.current_adapter = "flux-ghibsky"
 
-    path = predictor.predict(prompt="A test prompt", trigger_word="Anime")
+    path = predictor.predict(prompt="A test prompt", trigger_word="Anime", init_image="")
 
     assert isinstance(path, Path), "Should return a Path object"
     assert path.name == "fake_image.png", "Should return correct image path"
@@ -213,7 +223,7 @@ def test_predict_lora1_trigger_switches_from_lora2(predictor, capsys):
 
 def test_predict_lora2_trigger_switch(predictor, capsys):
     """Test switching from open-image-preferences to flux-ghibsky"""
-    path = predictor.predict(prompt="Another prompt", trigger_word="GHIBSKY")
+    path = predictor.predict(prompt="Another prompt", trigger_word="GHIBSKY" ,init_image="")
 
     assert isinstance(path, Path), "Should return a Path object"
     assert path.name == "fake_image.png", "Should return correct image path"
@@ -237,7 +247,7 @@ def test_predict_no_adapter_switch_when_same_adapter(predictor, capsys):
     """Test that adapter doesn't switch when already on correct adapter"""
     predictor.current_adapter = "open-image-preferences"
 
-    path = predictor.predict(prompt="Test prompt", trigger_word="Cinematic")
+    path = predictor.predict(prompt="Test prompt", trigger_word="Cinematic", init_image="")
 
     assert isinstance(path, Path), "Should return a Path object"
     assert predictor.current_adapter == "open-image-preferences", "Adapter should remain unchanged"
@@ -255,7 +265,7 @@ def test_predict_no_adapter_switch_for_lora2_when_already_set(predictor):
     """Test that flux-ghibsky doesn't switch when already active"""
     predictor.current_adapter = "flux-ghibsky"
 
-    path = predictor.predict(prompt="Ghibli style", trigger_word="GHIBSKY")
+    path = predictor.predict(prompt="Ghibli style", trigger_word="GHIBSKY", init_image="")
 
     assert predictor.current_adapter == "flux-ghibsky", "Adapter should remain flux-ghibsky"
     assert (
@@ -267,7 +277,7 @@ def test_predict_unknown_trigger_word_no_switch(predictor):
     """Test that unknown trigger words don't cause adapter switching"""
     predictor.current_adapter = "open-image-preferences"
 
-    path = predictor.predict(prompt="Random prompt", trigger_word="UnknownStyle")
+    path = predictor.predict(prompt="Random prompt", trigger_word="UnknownStyle", init_image="")
 
     assert (
         predictor.current_adapter == "open-image-preferences"
@@ -279,7 +289,7 @@ def test_predict_unknown_trigger_word_no_switch(predictor):
 
 def test_predict_pipeline_called_with_correct_kwargs(predictor):
     """Test that the pipeline is called with correct parameters"""
-    predictor.predict(prompt="Test image", trigger_word="Anime")
+    predictor.predict(prompt="Test image", trigger_word="Anime", init_image="")
 
     assert predictor.pipe.call_kwargs is not None, "Pipeline should be called"
     kwargs = predictor.pipe.call_kwargs
@@ -294,7 +304,7 @@ def test_predict_pipeline_called_with_correct_kwargs(predictor):
 
 def test_predict_torch_compile_called(predictor):
     """Test that torch.compile is called for all components"""
-    predictor.predict(prompt="Test", trigger_word="Anime")
+    predictor.predict(prompt="Test", trigger_word="Anime", init_image="")
 
     assert len(predictor._compile_calls) == 3, "torch.compile should be called 3 times"
 
@@ -310,7 +320,7 @@ def test_predict_uses_torch_no_grad_context(mock_no_grad, predictor):
     mock_context = MagicMock()
     mock_no_grad.return_value = mock_context
 
-    predictor.predict(prompt="Test", trigger_word="Anime")
+    predictor.predict(prompt="Test", trigger_word="Anime", init_image="")
 
     mock_no_grad.assert_called_once()
     mock_context.__enter__.assert_called_once()
@@ -339,7 +349,7 @@ def test_all_lora1_triggers_switch_correctly(predictor, trigger):
     predictor.current_adapter = "flux-ghibsky"
     predictor.pipe.reset_tracking()
 
-    predictor.predict(prompt=f"Test {trigger}", trigger_word=trigger)
+    predictor.predict(prompt=f"Test {trigger}", trigger_word=trigger, init_image="")
 
     assert (
         predictor.current_adapter == "open-image-preferences"
@@ -354,7 +364,7 @@ def test_all_lora1_triggers_switch_correctly(predictor, trigger):
 
 def test_predict_with_empty_prompt(predictor):
     """Test prediction with empty prompt"""
-    path = predictor.predict(prompt="", trigger_word="Anime")
+    path = predictor.predict(prompt="", trigger_word="Anime", init_image="")
 
     assert isinstance(path, Path), "Should handle empty prompt"
     assert predictor.pipe.call_kwargs['prompt'] == "", "Empty prompt should be passed to pipeline"
@@ -363,7 +373,7 @@ def test_predict_with_empty_prompt(predictor):
 def test_predict_with_long_prompt(predictor):
     """Test prediction with very long prompt"""
     long_prompt = "A " * 1000  # Very long prompt
-    path = predictor.predict(prompt=long_prompt, trigger_word="Cinematic")
+    path = predictor.predict(prompt=long_prompt, trigger_word="Cinematic", init_image="")
 
     assert isinstance(path, Path), "Should handle long prompt"
     assert (
@@ -374,12 +384,12 @@ def test_predict_with_long_prompt(predictor):
 def test_predict_state_persistence_across_calls(predictor):
     """Test that adapter state persists correctly across multiple calls"""
     # First call - switch to flux-ghibsky
-    predictor.predict(prompt="First", trigger_word="GHIBSKY")
+    predictor.predict(prompt="First", trigger_word="GHIBSKY", init_image="")
     assert predictor.current_adapter == "flux-ghibsky"
 
     # Second call - stay on flux-ghibsky
     predictor.pipe.reset_tracking()
-    predictor.predict(prompt="Second", trigger_word="GHIBSKY")
+    predictor.predict(prompt="Second", trigger_word="GHIBSKY", init_image="")
     assert predictor.current_adapter == "flux-ghibsky"
     assert (
         len(predictor.pipe.set_adapters_calls) == 0
@@ -387,7 +397,7 @@ def test_predict_state_persistence_across_calls(predictor):
 
     # Third call - switch to open-image-preferences
     predictor.pipe.reset_tracking()
-    predictor.predict(prompt="Third", trigger_word="Anime")
+    predictor.predict(prompt="Third", trigger_word="Anime", init_image="")
     assert predictor.current_adapter == "open-image-preferences"
     assert len(predictor.pipe.set_adapters_calls) == 1, "Should switch adapter"
 
@@ -397,7 +407,7 @@ def test_predict_case_sensitive_trigger_words(predictor):
     predictor.current_adapter = "open-image-preferences"
 
     # Lowercase version should not trigger switch
-    path = predictor.predict(prompt="Test", trigger_word="anime")
+    path = predictor.predict(prompt="Test", trigger_word="anime", init_image="")
     assert (
         predictor.current_adapter == "open-image-preferences"
     ), "Lowercase 'anime' should not trigger switch"
@@ -408,7 +418,7 @@ def test_predict_case_sensitive_trigger_words(predictor):
 
 def test_predict_memory_reporting(predictor, capsys):
     """Test that memory usage is correctly reported"""
-    predictor.predict(prompt="Test", trigger_word="Anime")
+    predictor.predict(prompt="Test", trigger_word="Anime", init_image="")
 
     captured = capsys.readouterr()
     assert "Used memory: 1.00 GB" in captured.out, "Memory usage should be reported"
