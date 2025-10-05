@@ -34,6 +34,9 @@ def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
 
 
 def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
+    """
+    Function to save the generated image.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{uuid.uuid4().hex}.png"
     image.save(output_path)

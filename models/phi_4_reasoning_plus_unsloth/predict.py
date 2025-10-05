@@ -6,6 +6,7 @@ from cog import BasePredictor, Input, Path
 
 
 def save_text(output_folder: SysPath, seed: int, index: str, text: str) -> SysPath:
+    """Save the generated text to disk as a .txt file."""
     output_path = output_folder / f"output_{seed}_{index}.txt"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
