@@ -1,0 +1,36 @@
+name: Push Model to Replicate
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_dir:
+        description: 'Path to model directory (e.g. models/flux-fast-lora-hotswap)'
+        required: true
+      username:
+        description: 'Replicate username (default: paragekbote)'
+        default: 'paragekbote'
+
+jobs:
+  push_to_replicate:
+    name: Push Model to Replicate
+    runs-on: ubuntu-latest
+
+    steps:
+      # Free up runner disk space if needed
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          docker-images: false
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Cog
+        uses: replicate/setup-cog@v2.0.2
+        with:
+          token: ${{ secrets.REPLICATE_API_TOKEN }}
+
+      - name: Push model to Replicate
+        run: |
+          make deploy MODEL_DIR=${{ inputs.model_dir }} USERNAME=${{ inputs.username }}
