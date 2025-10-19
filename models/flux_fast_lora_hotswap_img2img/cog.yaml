@@ -17,6 +17,7 @@ build:
         "transformers>=4.52.0" \
         "accelerate>=1.8.0" \
         "diffusers>=0.33.0" \
+        "requests>=2.31.0"  \
         "bitsandbytes>=0.45.0" \
         "python-dotenv==1.1.1" \
         "huggingface-hub[hf-xet]" \
