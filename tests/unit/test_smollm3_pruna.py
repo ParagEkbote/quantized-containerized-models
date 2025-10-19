@@ -72,7 +72,11 @@ class TestPredictor:
     def mock_model(self):
         """Create a mock model."""
         model = Mock()
-        model.parameters = Mock(return_value=[torch.tensor([1.0]).cuda()])
+        # Mock parameters without calling .cuda() to avoid GPU requirement
+        mock_param = Mock()
+        mock_param.device = torch.device("cpu")
+        # Return a new iterator each time parameters() is called
+        model.parameters = Mock(side_effect=lambda: iter([mock_param]))
         model.generate = Mock(
             return_value=torch.tensor([[1, 2, 3, 4, 5, 6, 7, 8]])
         )
@@ -81,9 +85,9 @@ class TestPredictor:
     @pytest.fixture
     def predictor(self, mock_tokenizer, mock_model):
         """Create a Predictor instance with mocked dependencies."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.AutoTokenizer") as mock_auto_tokenizer, \
-             patch("models.flux_fast_lora_hotswap_img2img.predict.AutoModelForCausalLM") as mock_auto_model, \
-             patch("models.flux_fast_lora_hotswap_img2img.predict.smash") as mock_smash:
+        with patch("models.smollm3_pruna.predict.AutoTokenizer") as mock_auto_tokenizer, \
+             patch("models.smollm3_pruna.predict.AutoModelForCausalLM") as mock_auto_model, \
+             patch("models.smollm3_pruna.predict.smash") as mock_smash:
             
             mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
             mock_auto_model.from_pretrained.return_value = Mock()
@@ -96,9 +100,9 @@ class TestPredictor:
 
     def test_setup_loads_model_and_tokenizer(self):
         """Test that setup correctly loads the model and tokenizer."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.AutoTokenizer") as mock_auto_tokenizer, \
-             patch("models.flux_fast_lora_hotswap_img2img.predict.AutoModelForCausalLM") as mock_auto_model, \
-             patch("models.flux_fast_lora_hotswap_img2img.predict.smash") as mock_smash:
+        with patch("models.smollm3_pruna.predict.AutoTokenizer") as mock_auto_tokenizer, \
+             patch("models.smollm3_pruna.predict.AutoModelForCausalLM") as mock_auto_model, \
+             patch("models.smollm3_pruna.predict.smash") as mock_smash:
             
             mock_tokenizer = Mock()
             mock_tokenizer.pad_token = None
@@ -129,7 +133,7 @@ class TestPredictor:
 
     def test_predict_returns_file_path(self, predictor, tmp_data_dir):
         """Test that predict returns a valid file path."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             result = predictor.predict(
                 prompt="Test prompt",
                 max_new_tokens=100,
@@ -143,7 +147,7 @@ class TestPredictor:
 
     def test_predict_uses_correct_chat_template(self, predictor, tmp_data_dir):
         """Test that predict applies the correct chat template."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             predictor.predict(
                 prompt="What is AI?",
                 max_new_tokens=50,
@@ -163,7 +167,7 @@ class TestPredictor:
 
     def test_predict_tokenizes_input(self, predictor, tmp_data_dir):
         """Test that predict tokenizes the input correctly."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             predictor.predict(
                 prompt="Hello world",
                 max_new_tokens=200,
@@ -180,7 +184,7 @@ class TestPredictor:
 
     def test_predict_generates_tokens(self, predictor, tmp_data_dir):
         """Test that predict calls the model's generate method."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             predictor.predict(
                 prompt="Generate text",
                 max_new_tokens=128,
@@ -197,7 +201,7 @@ class TestPredictor:
 
     def test_predict_decodes_output(self, predictor, tmp_data_dir):
         """Test that predict decodes the generated tokens."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             predictor.predict(
                 prompt="Test decoding",
                 max_new_tokens=64,
@@ -211,7 +215,7 @@ class TestPredictor:
 
     def test_predict_saves_full_output(self, predictor, tmp_data_dir):
         """Test that predict saves the full output (prompt + generation)."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             prompt = "Original prompt"
             result_path = predictor.predict(
                 prompt=prompt,
@@ -226,7 +230,7 @@ class TestPredictor:
 
     def test_predict_with_different_modes(self, predictor, tmp_data_dir):
         """Test predict with different reasoning modes."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             # Test 'think' mode
             predictor.predict(
                 prompt="Think about this",
@@ -254,7 +258,7 @@ class TestPredictor:
 
     def test_predict_respects_max_input_length(self, predictor, tmp_data_dir):
         """Test that predict calculates max_input_length correctly."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             max_new_tokens = 512
             predictor.predict(
                 prompt="Test max length",
@@ -269,7 +273,7 @@ class TestPredictor:
 
     def test_predict_with_negative_seed(self, predictor, tmp_data_dir):
         """Test that negative seed defaults to 0 in filename."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             result_path = predictor.predict(
                 prompt="Test seed",
                 max_new_tokens=50,
@@ -282,8 +286,8 @@ class TestPredictor:
 
     def test_predict_uses_no_grad_context(self, predictor, tmp_data_dir):
         """Test that predict uses torch.no_grad() for inference."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)), \
-             patch("models.flux_fast_lora_hotswap_img2img.predict.torch.no_grad") as mock_no_grad:
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)), \
+             patch("models.smollm3_pruna.predict.torch.no_grad") as mock_no_grad:
             
             predictor.predict(
                 prompt="Test no grad",
@@ -296,7 +300,7 @@ class TestPredictor:
 
     def test_predict_moves_inputs_to_device(self, predictor, tmp_data_dir):
         """Test that predict moves input tensors to the correct device."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             predictor.predict(
                 prompt="Test device placement",
                 max_new_tokens=50,
@@ -309,7 +313,7 @@ class TestPredictor:
 
     def test_predict_with_edge_case_max_new_tokens(self, predictor, tmp_data_dir):
         """Test predict with edge case token limits."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             # Test with minimum tokens (1)
             predictor.predict(
                 prompt="Minimal output",
@@ -324,7 +328,7 @@ class TestPredictor:
 
     def test_predict_output_filename_format(self, predictor, tmp_data_dir):
         """Test that output filename follows the correct format."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             seed = 999
             result_path = predictor.predict(
                 prompt="Test filename",
@@ -339,7 +343,7 @@ class TestPredictor:
 
     def test_predict_with_hf_token_set(self, predictor, tmp_data_dir, ensure_hf_token):
         """Test that predict works when HF_TOKEN is set (via conftest autouse)."""
-        with patch("models.flux_fast_lora_hotswap_img2img.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
+        with patch("models.smollm3_pruna.predict.tempfile.mkdtemp", return_value=str(tmp_data_dir)):
             result = predictor.predict(
                 prompt="Test with token",
                 max_new_tokens=50,
