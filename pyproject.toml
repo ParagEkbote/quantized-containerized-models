@@ -26,7 +26,6 @@ unsloth = [
     "wheel",
     "ninja",
     "cmake",
-    "flash-attn",
     "transformers",
     "accelerate",
     "unsloth",
@@ -77,8 +76,6 @@ test = [
     "pre-commit",
     "pytest"
 ]
-
-
 
 # ===== Pytest =====
 [tool.pytest.ini_options]

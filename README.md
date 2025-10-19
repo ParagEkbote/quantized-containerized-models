@@ -38,28 +38,6 @@
 
 ---
 
-## 🔄 CI/CD Workflow
-
-This repository implements structured **CI/CD pipelines** that ensures quality, reliability, and smooth deployments:
-
-### ✅ Continuous Integration (CI)
-
-* **Code Quality** – `flake8`, `black`, `isort`, `ty` and `bandit` checks.
-* **Unit Testing** – Covers core functions (`predict.py`), input/output validation, and error handling. (TODO)
-* **Integration Testing** – Build Cog containers, validate `cog.yaml`, run health checks, and test performance. (TODO)
-
-### 🚀 Continuous Deployment (CD) (TODO)
-
-* Automatic deployments to **Replicate** on completion of project.
-* **Staging-first workflow** – Test in staging before production release.
-* Semantic versioning for model releases and consistent Docker image tagging.
-* Post-deployment validation using Replicate API: response latency, output quality and smoke tests.
-
-### 📊 Deployment Tracking (TODO)
-
-* **Status Page (GitHub Pages)** – Automatically updated after each deployment with latest test results, deployment times, and model health.
----
-
 ## 📜 License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
