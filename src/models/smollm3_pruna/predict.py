@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 from cog import BasePredictor, Input  # DO NOT import Path from cog (shadowing)
-from pruna import SmashConfig, smash  # or pruna, whichever is correct in your env
+from pruna import SmashConfig, smash  
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 

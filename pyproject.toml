@@ -116,12 +116,3 @@ unresolved-attribute = "ignore"
 redundant-cast = "ignore"
 unsupported-operator = "ignore"
 invalid-argument-type = "ignore"
-
-# ===== UV Integration =====
-[tool.uv.scripts]
-lint = "pre-commit run --all-files"
-test = "pytest -q --disable-warnings"
-install-fa = """
-uv pip install --system packaging wheel ninja cmake torch
-uv pip install --system -U flash-attn --no-build-isolation
-"""
