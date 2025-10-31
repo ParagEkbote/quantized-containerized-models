@@ -1,10 +1,10 @@
-name: Push to Replicate
+name: Push to Replicate (CD)
 
 on:
   workflow_dispatch:
     inputs:
       model_name:
-        description: 'Enter the model name: smollm3 | unsloth | flux-fast-lora | flux-fast-lora-img2img | gemma-torchao'
+        description: 'Enter model name: smollm3 | unsloth | flux-fast-lora | flux-fast-lora-img2img | gemma-torchao'
         required: true
 
 jobs:
@@ -12,59 +12,69 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2️⃣ Free disk space (optional, for large containers)
-      - name: Free disk space
+      - name: Free disk space (for large models)
+        if: contains(fromJSON('["smollm3","flux-fast-lora","flux-fast-lora-img2img","gemma-torchao"]'), inputs.model_name)
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
           docker-images: false
 
-      # 3️⃣ Setup Python
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
-      # 4️⃣ Install UV
+      - name: Cache UV dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
       - name: Install UV
         run: pip install -U uv
 
-      # 5️⃣ Install Model-Specific Dependencies
       - name: Install Dependencies
         run: |
-          if [[ "${{ inputs.model_name }}" == "smollm3" ]]; then
-            uv install -G smollm3
-          elif [[ "${{ inputs.model_name }}" == "unsloth" ]]; then
-            uv install -G unsloth
-          elif [[ "${{ inputs.model_name }}" == "flux-fast-lora" ]]; then
-            uv install -G flux-fast-lora
-          elif [[ "${{ inputs.model_name }}" == "flux-fast-lora-img2img" ]]; then
-            uv install -G flux-fast-lora-img2img
-          elif [[ "${{ inputs.model_name }}" == "gemma-torchao" ]]; then
-            uv install -G gemma-torchao
-          else
-            echo "Unknown model_name: ${{ inputs.model_name }}"
-            exit 1
-          fi
+          case "${{ inputs.model_name }}" in
+            smollm3) uv install -G smollm3 ;;
+            unsloth) uv install -G unsloth ;;
+            flux-fast-lora) uv install -G flux-fast-lora ;;
+            flux-fast-lora-img2img) uv install -G flux-fast-lora-img2img ;;
+            gemma-torchao) uv install -G gemma-torchao ;;
+            *) echo "Unknown model_name: ${{ inputs.model_name }}" && exit 1 ;;
+          esac
 
-      # 6️⃣ Lint & Pre-commit checks
       - name: Run Pre-commit
         run: uv run lint
 
-      # 7️⃣ Run tests (optional)
       - name: Run Tests
         run: uv run test
 
-      # 8️⃣ Setup Cog
       - name: Setup Cog
         uses: replicate/setup-cog@v2
         with:
           token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
 
-      # 9️⃣ Push to Replicate
-      - name: Push Model
-        run: cog push r8.im/${{ inputs.model_name }}
+      - name: Validate Cog Build
+        run: |
+          cd src/models/${{ inputs.model_name }}
+          cog build
+
+      - name: Push Model to Replicate
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd src/models/${{ inputs.model_name }}
+          cog push replicate/ParagEkbote/${{ inputs.model_name }}
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "✅ Model deployed successfully!"
+          echo "Model: ${{ inputs.model_name }}"
+          echo "Owner: ParagEkbote"
+          echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
