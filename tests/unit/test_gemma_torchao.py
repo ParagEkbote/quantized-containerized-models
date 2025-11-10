@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
+import pytest
 from unittest.mock import patch, MagicMock
 
 # Import directly from the package (no dynamic import)
@@ -16,7 +17,33 @@ from models.gemma_torchao.predict import (
     Predictor,
 )
 
+@pytest.fixture(autouse=True)
+def _fix_cog_fieldinfo(monkeypatch):
+    """
+    Convert Cog Input(FieldInfo) attributes into real Python values
+    inside models.gemma_torchao.predict.Predictor.
+    """
 
+    import models.gemma_torchao.predict as mod
+    Predictor = mod.Predictor
+
+    # List all Input-based attributes inside your Predictor
+    # ◀️ EDIT this list to match your file
+    fields_to_patch = {
+        "max_new_tokens": 256,
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "seed": 42,
+        "guidance_scale": 1.2,
+        "image_strength": 0.5,   # if exists
+        "height": 1024,          # if exists
+        "width": 1024,           # if exists
+    }
+
+    # Apply the patches
+    for attr, fixed_value in fields_to_patch.items():
+        if hasattr(Predictor, attr):
+            monkeypatch.setattr(Predictor, attr, fixed_value, raising=False)
 # --------------------------------------------------------------------
 # login_with_env_token
 # --------------------------------------------------------------------
