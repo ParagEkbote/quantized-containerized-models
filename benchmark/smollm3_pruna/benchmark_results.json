@@ -1,0 +1,52 @@
+{
+  "deployment_id": "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423",
+  "deployment_name": "SmolLM3-3B-Smashed",
+  "timestamp": "2025-11-21T16:05:42.565276",
+  "input_params": {
+    "seed": 18,
+    "prompt": "What are the advantages of Hugging Face for model hosting?",
+    "max_new_tokens": 1420
+  },
+  "runs": [
+    {
+      "run_number": 1,
+      "elapsed_time": 189.54082536697388,
+      "output_length_chars": 2951,
+      "output_length_words": 413,
+      "output_text": "What are the advantages of Hugging Face for model hosting? Here are a few:\n\n1. **Scalability**: Hugging Face is designed to handle large datasets and complex models efficiently. It can scale to accommodate a growing number of users, models, and tasks, making it suitable for large-scale machine learning projects.\n\n2. **Multicollaboration**: Hugging Face supports multiple users and collaborators, allowing teams to work together on shared datasets and models. This promotes collaboration, code sharing, and model development in a unified environment.\n\n3. **Ease of Use**: Hugging Face provides a user-friendly interface, making it accessible to both beginners and experienced machine learning practitioners. It offers a comprehensive set of tools and libraries, including Python frameworks like PyTorch and TensorFlow, to facilitate model development and deployment.\n\n4. **Data Management**: Hugging Face simplifies data management by providing a centralized repository for datasets, models, and code. This reduces the need for manual data import/export and ensures that all collaborators have access to the same dataset and codebase.\n\n5. **Model Versioning**: Hugging Face supports versioning of models, allowing users to track changes and manage different versions of their models. This is useful when working on complex models or in collaborative environments where different versions may be needed.\n\n6. **Community Support**: Hugging Face has a growing community of users and developers, providing access to a wealth of resources, tutorials, and documentation. This community support helps with troubleshooting, code sharing, and model development.\n\n7. **Integration with Other Tools**: Hugging Face integrates seamlessly with other popular machine learning tools and frameworks, such as TensorFlow, PyTorch, and scikit-learn. This integration enables users to leverage the strengths of these tools while working within the Hugging Face environment.\n\n8. **Performance Optimization**: Hugging Face is optimized for performance, ensuring that models are deployed and trained efficiently. This is particularly important for large-scale models and datasets, where performance can significantly impact the overall success of a project.\n\n9. **Security**: Hugging Face provides a secure environment for model hosting, ensuring that sensitive data and models are protected from unauthorized access. This is especially important for organizations handling sensitive information or collaborating on sensitive projects.\n\n10. **Flexibility**: Hugging Face offers a flexible platform that can be tailored to meet the specific needs of users and organizations. Users can choose from various hosting options, such as public, private, or hybrid environments, to suit their requirements.\n\nOverall, Hugging Face provides a comprehensive solution for hosting and collaborating on machine learning models, with a focus on scalability, collaboration, and ease of use.",
+      "status": "success"
+    },
+    {
+      "run_number": 2,
+      "elapsed_time": 7.472118854522705,
+      "output_length_chars": 2394,
+      "output_length_words": 342,
+      "output_text": "What are the advantages of Hugging Face for model hosting? Here are some key benefits:\n\n1. **Scalability**: Hugging Face provides scalable infrastructure to handle large volumes of data and model predictions. This is especially important for real-time predictions and applications that need to process large datasets.\n\n2. **High Performance**: With Hugging Face's infrastructure, you can deploy models that can process data quickly and efficiently. The platform is designed to handle high computational demands and provide low-latency predictions.\n\n3. **Low Cost**: Hugging Face offers a pay-as-you-go pricing model, allowing you to pay only for the resources you use. This makes it an affordable option for businesses and researchers who need to host models without long-term commitments.\n\n4. **Ease of Use**: Hugging Face provides a user-friendly interface for deploying and managing models. You can easily create, train, and deploy models using the platform's built-in tools.\n\n5. **Integration with Other Tools**: Hugging Face integrates well with other popular tools and frameworks, such as TensorFlow, PyTorch, and scikit-learn. This makes it easy to use the platform with your existing development environment.\n\n6. **Security**: Hugging Face provides robust security measures to protect your models and data. This includes data encryption, secure authentication, and access controls.\n\n7. **Community Support**: Hugging Face has a large and active community of users and developers. This means you can find help and support from others who are facing similar challenges.\n\n8. **Flexibility**: Hugging Face offers a range of deployment options, including on-premises, cloud, and edge computing. This allows you to choose the best option for your specific use case.\n\n9. **Scalability for Edge Computing**: Hugging Face's infrastructure is designed to support edge computing, which is critical for real-time predictions and applications that require low-latency responses.\n\n10. **Continuous Monitoring and Maintenance**: Hugging Face provides tools for monitoring and maintaining your models. This includes features like model health checks, performance monitoring, and automatic updates.\n\nOverall, Hugging Face offers a comprehensive and scalable solution for hosting models, making it an attractive option for businesses and researchers who need to deploy and manage machine learning models.",
+      "status": "success"
+    },
+    {
+      "run_number": 3,
+      "status": "failed",
+      "error": "ReplicateError Details:\nstatus: 429\ndetail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~3s."
+    },
+    {
+      "run_number": 4,
+      "status": "failed",
+      "error": "ReplicateError Details:\nstatus: 429\ndetail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~2s."
+    },
+    {
+      "run_number": 5,
+      "status": "failed",
+      "error": "ReplicateError Details:\nstatus: 429\ndetail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~2s."
+    }
+  ],
+  "statistics": {
+    "successful_runs": 2,
+    "failed_runs": 3,
+    "avg_time": 98.50647211074829,
+    "min_time": 7.472118854522705,
+    "max_time": 189.54082536697388,
+    "avg_words": 377.5,
+    "avg_tokens_per_sec": 3.8322355060648854
+  }
+}
