@@ -1,5 +1,5 @@
 # ==============================================================
-# Minimal Cog Makefile: Build, Push, Deploy, Clean, Delete
+# Minimal Cog Makefile: Build, Push, Deploy, Clean, Delete, Lint,Test,Doc Deploy(Todo)
 # ==============================================================
 
 MODEL_DIR ?= $(CURDIR)
@@ -20,7 +20,7 @@ IMAGE_TAG := $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
 # --------------------------------------------------------------
 .PHONY: help
 help: ## Show available commands
-	@echo "Minimal Cog Makefile Commands:"
+	@echo "Cog Makefile Commands:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | sed 's/:.*##/:  /'
 
