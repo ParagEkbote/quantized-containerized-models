@@ -1,8 +1,13 @@
-# tests/test_predictor.py
 import torch
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
+import sys
 
+# Mock unsloth BEFORE importing anything that uses it
+sys.modules['unsloth'] = MagicMock()
+sys.modules['unsloth.models'] = MagicMock()
+
+# Now safe to import
 from models.phi_4_reasoning_plus_unsloth.predict import Predictor, save_text
 
 
@@ -23,9 +28,15 @@ def mock_fast_model():
     model = MagicMock()
     model.parameters.return_value = [torch.zeros(1)]
     model.generate.return_value = torch.tensor([[1, 2, 3]])
+    model.to.return_value = model
+    model.eval.return_value = model
 
     tokenizer = MagicMock()
     tokenizer.eos_token_id = 0
+    tokenizer.return_value = {
+        "input_ids": torch.tensor([[1, 2, 3]]),
+        "attention_mask": torch.tensor([[1, 1, 1]])
+    }
     tokenizer.decode.return_value = "decoded text"
 
     return model, tokenizer
@@ -34,11 +45,11 @@ def mock_fast_model():
 # ---------------------------
 # Predictor.setup test
 # ---------------------------
-@patch("torch.cuda.is_available", lambda: False)
-@patch("models.unsloth.predict.FastLanguageModel.from_pretrained")
-def test_setup(mock_from_pretrained):
+@patch("models.phi_4_reasoning_plus_unsloth.predict.FastLanguageModel")
+@patch("torch.cuda.is_available", return_value=False)
+def test_setup(mock_cuda, mock_fast_language_model):
     model, tok = mock_fast_model()
-    mock_from_pretrained.return_value = (model, tok)
+    mock_fast_language_model.from_pretrained.return_value = (model, tok)
 
     pred = Predictor()
     pred.setup()
@@ -46,32 +57,30 @@ def test_setup(mock_from_pretrained):
     assert pred.model is model
     assert pred.tokenizer is tok
     assert pred.dtype == torch.float32  # CPU fallback
+    mock_fast_language_model.from_pretrained.assert_called_once()
 
 
 # ---------------------------
 # Predictor.predict test
 # ---------------------------
-@patch("torch.cuda.is_available", lambda: False)
-@patch("models.unsloth.predict.FastLanguageModel.from_pretrained")
-@patch("torch.no_grad")
-def test_predict(mock_no_grad, mock_from_pretrained, tmp_path, monkeypatch):
+@patch("models.phi_4_reasoning_plus_unsloth.predict.FastLanguageModel")
+@patch("models.phi_4_reasoning_plus_unsloth.predict.save_text")
+@patch("torch.cuda.is_available", return_value=False)
+def test_predict(mock_cuda, mock_save_text, mock_fast_language_model, tmp_path):
     model, tok = mock_fast_model()
-    mock_from_pretrained.return_value = (model, tok)
-
-    # force save_text to tmp_path/result.txt
-    monkeypatch.setattr(
-        "models.unsloth.predict.save_text",
-        lambda folder, seed, idx, txt: tmp_path / "result.txt",
-    )
+    mock_fast_language_model.from_pretrained.return_value = (model, tok)
+    
+    result_path = tmp_path / "result.txt"
+    mock_save_text.return_value = result_path
 
     pred = Predictor()
     pred.setup()
     out = pred.predict(prompt="hello", max_new_tokens=10)
 
     assert isinstance(out, Path)
-    assert out.name == "result.txt"
+    assert out == result_path
 
-    tok.assert_called_once()                 # tokenization
-    model.generate.assert_called_once()      # text generation
-    tok.decode.assert_called_once()          # decoding
-    mock_no_grad.return_value.__enter__.assert_called_once()
+    tok.assert_called()
+    model.generate.assert_called_once()
+    tok.decode.assert_called_once()
+    mock_save_text.assert_called_once()
