@@ -165,6 +165,25 @@ def predictor_with_mock(monkeypatch, sample_image_path):
     return pred
 
 
+# Helper function to call predict with all required defaults
+def call_predict(predictor, prompt="Test", trigger_word="Anime", init_image=None, **kwargs):
+    """Helper to call predict with sensible defaults."""
+    defaults = {
+        'strength': 0.6,
+        'guidance_scale': 7.5,
+        'num_inference_steps': 28,
+        'seed': 42,
+    }
+    defaults.update(kwargs)
+    
+    return predictor.predict(
+        prompt=prompt,
+        trigger_word=trigger_word,
+        init_image=init_image or "/fake/path.png",
+        **defaults
+    )
+
+
 # ========================
 # Adapter switching tests
 # ========================
@@ -239,7 +258,12 @@ def test_predict_passes_correct_parameters(predictor_with_mock, sample_image_pat
     predictor_with_mock.predict(
         prompt="Test image", 
         trigger_word="Anime", 
-        init_image=sample_image_path
+        init_image=sample_image_path,
+        width=1024,
+        height=1024,
+        num_inference_steps=28,
+        guidance_scale=3.5,
+        seed=42
     )
 
     kwargs = predictor_with_mock.pipe.call_kwargs
@@ -259,7 +283,12 @@ def test_all_lora1_triggers_work(predictor_with_mock, trigger, sample_image_path
     predictor_with_mock.predict(
         prompt=f"Test {trigger}", 
         trigger_word=trigger, 
-        init_image=sample_image_path
+        init_image=sample_image_path,
+        width=1024,
+        height=1024,
+        num_inference_steps=28,
+        guidance_scale=3.5,
+        seed=42
     )
 
     assert predictor_with_mock.current_adapter == "open-image-preferences"
