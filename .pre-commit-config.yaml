@@ -1,20 +1,20 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.2
+    rev: v0.14.3
     hooks:
-      - id: ruff
-        args: ["--fix", "--exit-non-zero-on-fix"]
+      - id: ruff-check
+        args: [--fix]
         files: ^(tests/.*|.*/predict\.py)$
       - id: ruff-format
         files: ^(tests/.*|.*/predict\.py)$
 
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.5
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-      - id: bandit
-        args: ["-ll", "-ii"]
-        files: ^(tests/.*|.*/predict\.py)$
-        additional_dependencies: ["pbr"]
+      - id: check-yaml
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
 
   - repo: local
     hooks:
