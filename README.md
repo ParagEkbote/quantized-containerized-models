@@ -1,6 +1,6 @@
 # quantized-containerized-models
 
-![alt text](assets/project_hero_img.png)
+![alt text](assets/project_hero_img.webp)
 
 **quantized-containerized-models** is a project which aims to show how modern techniques such as quantization, containerization and CI/CD work together to produce fast, lightweight and production-ready model deployments. 
 

@@ -72,8 +72,9 @@ gemma-torchao = [
     "torchao"
 ]
 
-test = [
+dev-tooling = [
     "pre-commit",
+    "ty",
     "pytest"
 ]
 
