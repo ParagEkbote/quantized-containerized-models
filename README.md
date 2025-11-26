@@ -1,4 +1,4 @@
-# quantized-containerized-models
+# Quantized-Containerized-Models
 
 ![alt text](assets/project_hero_img.webp)
 
