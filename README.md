@@ -1,6 +1,8 @@
 # quantized-containerized-models
 
-**quantized-containerized-models** is a collection of experiments and best practices for deploying **optimized AI models** in efficient, containerized environments. The goal is to showcase how modern techniques—quantization, containerization and continuous integration/deployment (CI/CD) can work together to deliver fast, lightweight, and production-ready model deployments.
+![alt text](assets/project_hero_img.png)
+
+**quantized-containerized-models** is a collection of experiments and best practices for deploying **optimized AI models** in efficient, containerized environments. The goal is to showcase how modern techniques: quantization, containerization and continuous integration/deployment (CI/CD) can work together to deliver fast, lightweight and production-ready model deployments.
 
 ---
 
