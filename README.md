@@ -2,7 +2,7 @@
 
 ![alt text](assets/project_hero_img.png)
 
-**quantized-containerized-models** is a curated set of deployments demonstrating best practices for running optimized AI models in containerized environments. The project aims to show how modern techniques such as quantization, containerization and continuous integration/deployment work together to produce fast, lightweight and production-ready model deployments. 
+**quantized-containerized-models** is a project which aims to show how modern techniques such as quantization, containerization and continuous integration/deployment work together to produce fast, lightweight and production-ready model deployments. 
 
 Its core objective is to show that cutting edge, research AI systems can be built without sacrificing reproducibility, scalability or hardware efficiency.
 
