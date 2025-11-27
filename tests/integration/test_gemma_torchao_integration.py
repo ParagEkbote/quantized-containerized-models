@@ -4,8 +4,9 @@ import pytest
 import replicate
 import time
 
-DEPLOYMENT_ID = ("paragekbote/gemma3-torchao-quant-sparse:"
-               "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2")
+DEPLOYMENT_ID = (
+    "paragekbote/gemma3-torchao-quant-sparse:"
+    "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2")
 
 
 BASE_INPUT = {
@@ -76,7 +77,7 @@ def test_gemma_two_configs():
     ratio = t_one / t_two if t_two > 0 else float("inf")
     assert 0.3 < ratio < 3.0, f"Latency ratio suspicious: {ratio:.2f}"
 
-    print("Call 1 params:", params_one)
-    print("Call 1 elapsed:", t_one)
-    print("Call 2 params:", params_two)
-    print("Call 2 elapsed:", t_two)
+    logger.info("Call 1 params:", params_one)
+    logger.info("Call 1 elapsed:", t_one)
+    logger.info("Call 2 params:", params_two)
+    logger.info("Call 2 elapsed:", t_two)

@@ -1,7 +1,19 @@
 import os
+import time
+import logging
 import pytest
 import replicate
-import time
+
+# -----------------------------------------------------
+# Logging configuration
+# -----------------------------------------------------
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 DEPLOYMENT_ID = (
     "paragekbote/phi-4-reasoning-plus-unsloth:"
@@ -11,7 +23,7 @@ DEPLOYMENT_ID = (
 BASE_INPUT = {
     "prompt": "Summarize the plot of Alice in Wonderland.",
     "seed": 42,
-    "max_new_tokens": 40,  # keep fast for integration testing
+    "max_new_tokens": 40,
 }
 
 
@@ -23,57 +35,71 @@ BASE_INPUT = {
 def test_phi4_two_sampling_modes():
     """
     Integration test for Unsloth Phi-4 reasoning predictor:
-    - Call 1: lower temperature, higher top_p (more deterministic)
-    - Call 2: higher temperature, lower top_p (more creative)
-    - Ensures both calls succeed and outputs differ meaningfully.
+    - Call 1: stable (low temperature, high top_p)
+    - Call 2: creative (high temperature, low top_p)
     """
 
-    # First sampling configuration (more stable / deterministic)
+
+    # Deterministic sampling
     call1 = {
         **BASE_INPUT,
         "temperature": 0.3,
         "top_p": 0.95,
     }
 
-    # Second sampling configuration (more stochastic / creative)
+    # Creative sampling
     call2 = {
         **BASE_INPUT,
         "temperature": 0.9,
         "top_p": 0.5,
     }
 
-    outputs = []
+    results = []
 
     for params in (call1, call2):
+        logger.info(f"\nCalling model with params: {params}")
+
         start = time.time()
         raw_output = replicate.run(DEPLOYMENT_ID, input=params)
         elapsed = time.time() - start
 
-        # Replicate may stream or return a list
+        # Handle streamed output or complete text
         if isinstance(raw_output, list):
             text = "".join(raw_output)
         else:
             text = "".join(chunk for chunk in raw_output)
 
-        outputs.append((params, text, elapsed))
+        logger.info(f"Call completed in {elapsed:.2f}s")
+        logger.info(f"Output preview: {text[:120]!r}")
 
-        # Basic text/output validation
-        assert isinstance(text, str), "Output must be a string"
-        assert len(text) > 20, "Output too short — generation failed"
-        assert elapsed < 25, f"Inference too slow ({elapsed:.2f}s) for params={params}"
+        # Assertions
+        assert isinstance(text, str), "Model returned non-string output"
+        assert len(text) > 20, "Output too short — likely generation failure"
+        assert elapsed < 25, f"Call too slow: {elapsed:.2f}s"
 
-    # Unpack the results
-    (_, out1, t1), (_, out2, t2) = outputs
+        results.append((params, text, elapsed))
 
-    # 1. Outputs between sampling configs should differ
-    assert out1 != out2, "High-temp and low-temp outputs should not be identical"
+    # -----------------------------------------------------
+    # Post-run comparison
+    # -----------------------------------------------------
+    (params1, out1, t1), (params2, out2, t2) = results
 
-    # 2. Latency should be roughly in the same range
-    ratio = t1 / t2
-    assert 0.4 < ratio < 2.5, f"Latency drift too large: ratio={ratio:.2f}"
+    logger.info(f"Stable sampling output preview: {out1[:120]!r}")
+    logger.info(f"Creative sampling output preview: {out2[:120]!r}")
 
-    # 3. Ensure temperature and top_p behave as expected:
-    #    High temperature usually produces more varied text
-    assert len(set(out2.split())) >= len(set(out1.split())) * 0.7, (
-        "High-temperature output appears unnaturally similar to low-temperature output"
+    # 1. Content difference
+    assert out1 != out2, "High-temp and low-temp outputs should differ"
+
+    # 2. Timing comparison
+    ratio = t1 / t2 if t2 > 0 else float("inf")
+    logger.info(f"Timing ratio (t1/t2): {ratio:.2f}")
+    assert 0.4 < ratio < 2.5, f"Timing drift too large: ratio={ratio:.2f}"
+
+    # 3. Creativity difference heuristic
+    unique_words_1 = len(set(out1.split()))
+    unique_words_2 = len(set(out2.split()))
+    logger.info(f"Unique word counts → stable: {unique_words_1}, creative: {unique_words_2}")
+
+    assert unique_words_2 >= unique_words_1 * 0.7, (
+        "Creative mode output does not appear significantly more varied"
     )

@@ -66,6 +66,5 @@ def test_flux_fast_lora_two_modes():
     time_ratio = time_one / time_two
     assert 0.4 < time_ratio < 2.5, f"Time ratio too large: {time_ratio:.2f}"
 
-    print("\n--- Integration Test Outputs ---")
-    print("LoRA1 (Anime):", image_one)
-    print("LoRA2 (GHIBSKY):", image_two)
+    logger.info("LoRA1 (Anime):", image_one)
+    logger.info("LoRA2 (GHIBSKY):", image_two)
