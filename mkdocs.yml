@@ -1,0 +1,84 @@
+site_name: "Quantized-Containerized-Models"
+site_description: "Documentation for optimized, quantized, and containerized AI model deployments."
+
+# Optional: Add URL when hosted
+# site_url: "https://paragekbote.github.io/quantized-containerized-models/"
+
+theme:
+  name: "material"
+  font:
+    text: Raleway
+
+  logo: assets/project_hero_img.webp         # <-- Add project logo (highly recommended)
+  favicon: assets/favicon.png    # <-- Add small favicon
+
+  features:
+    - navigation.footer
+    - navigation.top
+    - toc.follow
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit        # Adds edit button for GitHub
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+
+  palette:
+    # Light mode
+    - scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+      primary: white
+      accent: indigo
+
+    # Dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+      primary: black
+      accent: indigo
+
+#docs_dir: "/workspaces/quantized-containerized-models/docs"
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ParagEkbote/quantized-containerized-models
+      name: Source Code
+
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - md_in_html
+  - pymdownx.blocks.caption
+
+  # Table of contents with anchors
+  - toc:
+      permalink: true
+
+  # Code highlighting improvements
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+  # Tabs for code examples
+  - pymdownx.tabbed:
+      alternate_style: true
+
+  # Snippets, inline highlighting
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
