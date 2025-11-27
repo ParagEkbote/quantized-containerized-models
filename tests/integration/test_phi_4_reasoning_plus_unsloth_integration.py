@@ -3,8 +3,6 @@ import pytest
 import replicate
 import time
 
-
-# Replace with your deployment ID
 DEPLOYMENT_ID = (
     "paragekbote/phi-4-reasoning-plus-unsloth:"
     "a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"

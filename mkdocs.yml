@@ -1,16 +1,15 @@
 site_name: "Quantized-Containerized-Models"
-site_description: "Documentation for optimized, quantized, and containerized AI model deployments."
+site_description: "Documentation for quantized and containerized AI model deployments."
 
-# Optional: Add URL when hosted
 # site_url: "https://paragekbote.github.io/quantized-containerized-models/"
 
 theme:
   name: "material"
   font:
-    text: Raleway
+    text: Ubuntu
 
-  logo: assets/project_hero_img.webp         # <-- Add project logo (highly recommended)
-  favicon: assets/favicon.png    # <-- Add small favicon
+  logo: assets/project_hero_img.webp   
+  favicon: assets/project_hero_img.ico   
 
   features:
     - navigation.footer
@@ -33,7 +32,7 @@ theme:
         icon: material/weather-sunny
         name: Light mode
       primary: white
-      accent: indigo
+      accent: amber
 
     # Dark mode
     - scheme: slate
@@ -41,7 +40,7 @@ theme:
         icon: material/weather-night
         name: Dark mode
       primary: black
-      accent: indigo
+      accent: amber
 
 #docs_dir: "/workspaces/quantized-containerized-models/docs"
 
