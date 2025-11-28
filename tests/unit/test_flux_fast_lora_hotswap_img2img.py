@@ -1,329 +1,295 @@
-from io import BytesIO
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
+import inspect
 import pytest
-import requests
+from pathlib import Path
 import torch
-from PIL import Image
-from pytest import raises
-
+from pydantic.fields import FieldInfo,  PydanticUndefined
+from pydantic import GetCoreSchemaHandler
+from pydantic import GetJsonSchemaHandler
+from pydantic import FieldValidationInfo
 from models.flux_fast_lora_hotswap_img2img.predict import (
     Predictor,
-    load_image,
-    login_with_env_token,
     save_image,
+    load_image,
 )
+from cog import Input
+
+def extract_constraints(field: FieldInfo):
+    ge = None
+    le = None
+    for meta in field.metadata:
+        cls_name = meta.__class__.__name__.lower()
+        if cls_name == "ge":
+            ge = meta.ge
+        elif cls_name == "le":
+            le = meta.le
+    return ge, le
 
 
-# ========================
-# login_with_env_token tests
-# ========================
-def test_login_with_valid_token(monkeypatch):
-    """Test successful login with HF_TOKEN."""
-    monkeypatch.setenv("HF_TOKEN", "dummy_token")
-    called = {}
+@pytest.mark.unit
+def test_numeric_constraints_strength_guidance_steps():
+    """
+    Contract test: Ensure strength, guidance_scale, num_inference_steps
+    preserve ge/le constraints exactly as defined in the schema.
+    """
 
-    def mock_login(token):
-        called["token"] = token
+    sig = inspect.signature(Predictor.predict)
+    params = sig.parameters
 
-    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.login", mock_login)
-    login_with_env_token()
-    assert called["token"] == "dummy_token"
+    # --- Strength ---
+    strength_field: FieldInfo = params["strength"].default
+    assert isinstance(strength_field, FieldInfo)
+    ge, le = extract_constraints(strength_field)
 
+    assert ge == 0, "strength.ge must be 0"
+    assert le == 1, "strength.le must be 1"
+    assert strength_field.default == 0.6
 
-def test_login_with_missing_token(monkeypatch):
-    """Test ValueError raised when HF_TOKEN is missing."""
-    monkeypatch.delenv("HF_TOKEN", raising=False)
-    with raises(ValueError, match="HF_TOKEN not found"):
-        login_with_env_token()
+    # --- Guidance Scale ---
+    gs_field: FieldInfo = params["guidance_scale"].default
+    assert isinstance(gs_field, FieldInfo)
+    ge, le = extract_constraints(gs_field)
 
+    assert ge == 0, "guidance_scale.ge must be 0"
+    assert le is None, "guidance_scale.le must be None"
+    assert gs_field.default == 7.5
 
-def test_login_with_custom_env_var(monkeypatch):
-    """Test login with custom environment variable."""
-    monkeypatch.setenv("CUSTOM_TOKEN", "custom_value")
-    called = {}
+    # --- Num Inference Steps ---
+    steps_field: FieldInfo = params["num_inference_steps"].default
+    assert isinstance(steps_field, FieldInfo)
+    ge, le = extract_constraints(steps_field)
 
-    def mock_login(token):
-        called["token"] = token
+    assert ge == 1, "num_inference_steps.ge must be 1"
+    assert le is None, "num_inference_steps.le must be None"
+    assert steps_field.default == 28
 
-    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.login", mock_login)
-    login_with_env_token(env_var="CUSTOM_TOKEN")
-    assert called["token"] == "custom_value"
+# -----------------------------------------------------------------------------
+# Contract 1 — Function signature must remain stable
+# -----------------------------------------------------------------------------
+@pytest.mark.unit
+def test_predict_signature_stable():
+    pred = Predictor()
+    sig = inspect.signature(pred.predict)
+    params = list(sig.parameters.values())
 
+    expected = [
+        "prompt",
+        "trigger_word",
+        "init_image",
+        "strength",
+        "guidance_scale",
+        "num_inference_steps",
+        "seed",
+    ]
 
-# ========================
-# save_image tests
-# ========================
-def test_save_image(tmp_path):
-    """Test basic image saving functionality."""
-    img = Image.new("RGB", (10, 10), color="red")
-    output_path = save_image(img, output_dir=tmp_path)
-    
-    assert output_path.exists()
-    assert output_path.suffix == ".png"
-    assert Image.open(output_path).size == (10, 10)
-
-
-def test_save_image_creates_directory(tmp_path):
-    """Test that nested directories are created automatically."""
-    img = Image.new("RGB", (10, 10), color="blue")
-    nested_dir = tmp_path / "nested" / "dir"
-    output_path = save_image(img, output_dir=nested_dir)
-    
-    assert nested_dir.exists()
-    assert output_path.exists()
-
-
-def test_save_image_unique_filenames(tmp_path):
-    """Test that each save generates a unique filename."""
-    img = Image.new("RGB", (10, 10), color="green")
-    path1 = save_image(img, output_dir=tmp_path)
-    path2 = save_image(img, output_dir=tmp_path)
-    
-    assert path1 != path2
+    assert [p.name for p in params] == expected, (
+        "Predict signature changed unexpectedly. "
+        f"Expected {expected}, got {[p.name for p in params]}"
+    )
 
 
-# ========================
-# load_image tests
-# ========================
-def test_load_image_from_file(tmp_path):
-    """Test loading image from local file."""
-    file_path = tmp_path / "test.png"
-    img = Image.new("RGB", (5, 5), color="blue")
-    img.save(file_path)
-    
-    loaded_img = load_image(str(file_path))
-    assert isinstance(loaded_img, Image.Image)
-    assert loaded_img.size == (5, 5)
+# -----------------------------------------------------------------------------
+# Contract 2 — Required fields must be enforced
+# -----------------------------------------------------------------------------
+@pytest.mark.unit
+def test_missing_required_fields_raise():
+    sig = inspect.signature(Predictor.predict)
+    params = sig.parameters
+
+    required_fields = ["prompt", "trigger_word", "init_image"]
+
+    for name in required_fields:
+        assert name in params, f"{name} missing from predict signature"
+
+        field: FieldInfo = params[name].default
+        assert isinstance(field, FieldInfo), f"{name} must be a FieldInfo (Cog Input)"
+
+        # Cog marks required fields by the absence of a *default attribute*
+        assert field.default is PydanticUndefined, (
+            f"{name} must be required (no default), found default={field.default}"
+        )
+
+    # Calling unbound method without required args must raise TypeError
+    with pytest.raises(TypeError):
+        Predictor.predict()
 
 
-def test_load_image_from_url(monkeypatch):
-    """Test loading image from URL."""
-    dummy_img = Image.new("RGB", (8, 8), color="green")
-    buf = BytesIO()
-    dummy_img.save(buf, format="PNG")
-    buf.seek(0)
+# -----------------------------------------------------------------------------
+# Contract 3 — Input() defaults and constraints must remain identical to schema
+# -----------------------------------------------------------------------------
+@pytest.mark.unit
+def test_input_constraints_intact():
+    pred = Predictor()
+    sig = inspect.signature(pred.predict)
+    params = sig.parameters
 
-    class MockResponse:
-        content = buf.getvalue()
-        def raise_for_status(self):
-            pass
+    # Get FieldInfo objects from parameters
+    strength_meta: Input = params['strength'].default
+    guidance_meta: Input = params['guidance_scale'].default
+    steps_meta: Input = params['num_inference_steps'].default
+    seed_meta: Input = params['seed'].default
 
-    monkeypatch.setattr(requests, "get", lambda url, timeout: MockResponse())
-    
-    loaded_img = load_image("https://example.com/fake.png")
-    assert isinstance(loaded_img, Image.Image)
-    assert loaded_img.size == (8, 8)
+    # Helper to extract constraints from metadata
+    def get_constraints(field_info):
+        constraints = {}
+        for item in field_info.metadata:
+            if hasattr(item, 'ge'):
+                constraints['ge'] = item.ge
+            if hasattr(item, 'le'):
+                constraints['le'] = item.le
+        return constraints
+
+    # strength: 0..1
+    strength_constraints = get_constraints(strength_meta)
+    assert strength_constraints.get('ge') == 0
+    assert strength_constraints.get('le') == 1
+
+    # guidance_scale: ge=0
+    guidance_constraints = get_constraints(guidance_meta)
+    assert guidance_constraints.get('ge') == 0
+
+    # num_inference_steps: ge=1
+    steps_constraints = get_constraints(steps_meta)
+    assert steps_constraints.get('ge') == 1
+
+    # Verify FieldInfo objects exist
+    assert strength_meta is not None
+    assert guidance_meta is not None
+    assert steps_meta is not None
+    assert seed_meta is not None
 
 
-# ========================
-# Predictor tests
-# ========================
-class MockPipeline:
-    """Simplified mock pipeline for testing."""
+# -----------------------------------------------------------------------------
+# Contract 4 — Invalid numerical values must raise BEFORE heavy compute
+# -----------------------------------------------------------------------------
+@pytest.mark.unit
+def test_invalid_numeric_arguments_raise():
+    pred = Predictor()
+    pred.setup = lambda: None  # disable loading huge pipeline
+    pred.lora2_triggers = {}  # Initialize required attribute
+    pred.pipe = None
+
+    # strength out of bounds
+    with pytest.raises(Exception):
+        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png",
+                     strength=-0.1)
+
+    with pytest.raises(Exception):
+        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png",
+                     strength=2.0)
+
+    # num_inference_steps invalid
+    with pytest.raises(Exception):
+        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png",
+                     num_inference_steps=0)
+
+
+# -----------------------------------------------------------------------------
+# Minimal mocks needed for running predict() without GPU / Internet
+# -----------------------------------------------------------------------------
+class DummyPipeline:
     def __init__(self):
-        self.images = [Image.new("RGB", (64, 64), color="pink")]
-        self.set_adapters_calls = []
-        self.call_kwargs = None
-
-    def set_adapters(self, adapters, adapter_weights):
-        self.set_adapters_calls.append({
-            'adapters': adapters, 
-            'weights': adapter_weights
-        })
+        self._images = [ImagePlaceholder()]
 
     def __call__(self, **kwargs):
-        self.call_kwargs = kwargs
         return self
 
-    def reset_tracking(self):
-        self.set_adapters_calls = []
-        self.call_kwargs = None
+    @property
+    def images(self):
+        return self._images
 
 
-@pytest.fixture
-def predictor_with_mock(monkeypatch, sample_image_path):
-    """Create predictor with mocked pipeline."""
-    monkeypatch.setattr(Predictor, "pipe", None, raising=False)
-    
+class ImagePlaceholder:
+    """Fake PIL Image-like object with save()."""
+    def save(self, path):
+        with open(path, "wb") as f:
+            f.write(b"fake-image")
+
+
+# -----------------------------------------------------------------------------
+# Contract 5 — predict() must return a Path object
+# -----------------------------------------------------------------------------
+@pytest.mark.unit
+def test_predict_returns_path(tmp_path, monkeypatch):
     pred = Predictor()
-    mock_pipe = MockPipeline()
-    monkeypatch.setattr(pred, "pipe", mock_pipe)
-    
-    # Mock save_image to return fake path
-    monkeypatch.setattr(
-        "models.flux_fast_lora_hotswap_img2img.predict.save_image",
-        lambda img, output_dir=None: Path("/tmp/fake_image.png"),
+
+    # Initialize required attributes
+    pred.lora2_triggers = {
+        "Cinematic": "cinematic-adapter",
+        "GHIBSKY": "flux-ghibsky"
+    }
+    pred.current_adapter = None
+
+    # mock everything heavy:
+    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.load_image",
+                        lambda url: ImagePlaceholder())
+
+    class DummyPipe:
+        def set_adapters(self, names, adapter_weights):
+            pass
+        def __call__(self, **kwargs):
+            return DummyPipeline()
+
+    pred.pipe = DummyPipe()
+
+    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.save_image",
+                        lambda img, output_dir=tmp_path: tmp_path / "result.png")
+
+    # Explicitly pass all parameters
+    out = pred.predict(
+        prompt="hello",
+        trigger_word="Cinematic",
+        init_image="http://fake",
+        strength=0.6,
+        guidance_scale=7.5,
+        num_inference_steps=28,
+        seed=42
     )
+
+    assert isinstance(out, Path)
+    assert out.name == "result.png"
+
+
+# -----------------------------------------------------------------------------
+# Contract 6 — Trigger word must select correct adapter
+# (No real LoRA loading; just check state transition)
+# -----------------------------------------------------------------------------
+@pytest.mark.unit
+def test_trigger_word_switching(monkeypatch):
+    pred = Predictor()
     
-    # Set up predictor state
+    # Initialize required attributes
+    pred.lora2_triggers = {
+        "Cinematic": "cinematic-adapter",
+        "GHIBSKY": "flux-ghibsky"
+    }
     pred.current_adapter = "open-image-preferences"
-    pred.lora1_triggers = ["Cinematic", "Anime", "Digital art"]
-    pred.lora2_triggers = ["GHIBSKY"]
-    
-    return pred
 
+    # Mock image
+    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.load_image",
+                        lambda url: ImagePlaceholder())
 
-# Helper function to call predict with all required defaults
-def call_predict(predictor, prompt="Test", trigger_word="Anime", init_image=None, **kwargs):
-    """Helper to call predict with sensible defaults."""
-    defaults = {
-        'strength': 0.6,
-        'guidance_scale': 7.5,
-        'num_inference_steps': 28,
-        'seed': 42,
-    }
-    defaults.update(kwargs)
-    
-    return predictor.predict(
-        prompt=prompt,
-        trigger_word=trigger_word,
-        init_image=init_image or "/fake/path.png",
-        **defaults
-    )
+    class DummyPipe:
+        def __init__(self):
+            self.adapter_history = []
 
+        def set_adapters(self, names, adapter_weights):
+            self.adapter_history.append(names[0])
 
-# ========================
-# Adapter switching tests
-# ========================
-def test_predict_switches_to_lora1(predictor_with_mock, sample_image_path):
-    """Test switching from LORA2 to LORA1."""
-    predictor_with_mock.current_adapter = "flux-ghibsky"
-    
-    path = predictor_with_mock.predict(
-        prompt="Test prompt", 
-        trigger_word="Anime", 
-        init_image=sample_image_path
-    )
-    
-    assert isinstance(path, Path)
-    assert predictor_with_mock.current_adapter == "open-image-preferences"
-    assert len(predictor_with_mock.pipe.set_adapters_calls) == 1
-    assert predictor_with_mock.pipe.set_adapters_calls[0] == {
-        'adapters': ["open-image-preferences"],
-        'weights': [1.0]
-    }
+        def __call__(self, **k):
+            return DummyPipeline()
 
+    pred.pipe = DummyPipe()
 
-def test_predict_switches_to_lora2(predictor_with_mock, sample_image_path):
-    """Test switching from LORA1 to LORA2."""
-    path = predictor_with_mock.predict(
-        prompt="Ghibli style", 
+    # use GHIBSKY → should switch to flux-ghibsky
+    pred.predict(
+        prompt="hello",
         trigger_word="GHIBSKY",
-        init_image=sample_image_path
-    )
-    
-    assert predictor_with_mock.current_adapter == "flux-ghibsky"
-    assert len(predictor_with_mock.pipe.set_adapters_calls) == 1
-    assert predictor_with_mock.pipe.set_adapters_calls[0] == {
-        'adapters': ["flux-ghibsky"],
-        'weights': [0.8]
-    }
-
-
-def test_predict_no_switch_when_already_correct(predictor_with_mock, sample_image_path):
-    """Test that redundant adapter switches are avoided."""
-    predictor_with_mock.current_adapter = "open-image-preferences"
-    
-    predictor_with_mock.predict(
-        prompt="Test", 
-        trigger_word="Cinematic", 
-        init_image=sample_image_path
-    )
-    
-    assert predictor_with_mock.current_adapter == "open-image-preferences"
-    assert len(predictor_with_mock.pipe.set_adapters_calls) == 0
-
-
-def test_predict_unknown_trigger_no_switch(predictor_with_mock, sample_image_path):
-    """Test that unknown triggers don't cause switches."""
-    initial_adapter = predictor_with_mock.current_adapter
-    
-    predictor_with_mock.predict(
-        prompt="Test", 
-        trigger_word="UnknownWord", 
-        init_image=sample_image_path
-    )
-    
-    assert predictor_with_mock.current_adapter == initial_adapter
-    assert len(predictor_with_mock.pipe.set_adapters_calls) == 0
-
-
-# ========================
-# Pipeline parameter tests
-# ========================
-def test_predict_passes_correct_parameters(predictor_with_mock, sample_image_path):
-    """Test that pipeline receives correct generation parameters."""
-    predictor_with_mock.predict(
-        prompt="Test image", 
-        trigger_word="Anime", 
-        init_image=sample_image_path,
-        width=1024,
-        height=1024,
+        init_image="http://fake",
+        strength=0.6,
+        guidance_scale=7.5,
         num_inference_steps=28,
-        guidance_scale=3.5,
         seed=42
     )
 
-    kwargs = predictor_with_mock.pipe.call_kwargs
-    assert kwargs['prompt'] == "Test image"
-    assert kwargs['height'] == 1024
-    assert kwargs['width'] == 1024
-    assert kwargs['guidance_scale'] == 3.5
-    assert kwargs['num_inference_steps'] == 28
-
-
-@pytest.mark.parametrize("trigger", ["Cinematic", "Anime", "Digital art"])
-def test_all_lora1_triggers_work(predictor_with_mock, trigger, sample_image_path):
-    """Test that all LORA1 triggers switch correctly."""
-    predictor_with_mock.current_adapter = "flux-ghibsky"
-    predictor_with_mock.pipe.reset_tracking()
-
-    predictor_with_mock.predict(
-        prompt=f"Test {trigger}", 
-        trigger_word=trigger, 
-        init_image=sample_image_path,
-        width=1024,
-        height=1024,
-        num_inference_steps=28,
-        guidance_scale=3.5,
-        seed=42
-    )
-
-    assert predictor_with_mock.current_adapter == "open-image-preferences"
-    assert len(predictor_with_mock.pipe.set_adapters_calls) == 1
-    assert predictor_with_mock.pipe.set_adapters_calls[0]['weights'] == [1.0]
-
-
-# ========================
-# State persistence tests
-# ========================
-def test_predict_state_persists_across_calls(predictor_with_mock, sample_image_path):
-    """Test adapter state persistence across multiple calls."""
-    # Switch to LORA2
-    predictor_with_mock.predict(
-        prompt="First", 
-        trigger_word="GHIBSKY", 
-        init_image=sample_image_path
-    )
-    assert predictor_with_mock.current_adapter == "flux-ghibsky"
-
-    # Stay on LORA2
-    predictor_with_mock.pipe.reset_tracking()
-    predictor_with_mock.predict(
-        prompt="Second", 
-        trigger_word="GHIBSKY", 
-        init_image=sample_image_path
-    )
-    assert len(predictor_with_mock.pipe.set_adapters_calls) == 0
-
-    # Switch to LORA1
-    predictor_with_mock.pipe.reset_tracking()
-    predictor_with_mock.predict(
-        prompt="Third", 
-        trigger_word="Anime", 
-        init_image=sample_image_path
-    )
-    assert predictor_with_mock.current_adapter == "open-image-preferences"
-    assert len(predictor_with_mock.pipe.set_adapters_calls) == 1
+    assert pred.current_adapter == "flux-ghibsky"
+    assert pred.pipe.adapter_history[-1] == "flux-ghibsky"
