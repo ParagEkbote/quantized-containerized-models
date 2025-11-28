@@ -83,7 +83,7 @@ dev-tooling = [
 minversion = "8.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",
