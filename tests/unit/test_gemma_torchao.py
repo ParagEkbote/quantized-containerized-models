@@ -4,7 +4,6 @@ import torch
 from pathlib import Path
 from types import SimpleNamespace
 
-# Import directly 
 from models.gemma_torchao.predict import (
     login_with_env_token,
     save_output_to_file,
@@ -105,6 +104,7 @@ def minimal_predictor(monkeypatch, tmp_path):
 # -------------------------
 # 1) Signature contract
 # -------------------------
+@pytest.mark.unit
 def test_predict_signature_stable():
     pred = Predictor()
     sig = inspect.signature(pred.predict)
@@ -128,6 +128,7 @@ def test_predict_signature_stable():
 # -------------------------
 # 2) Required field enforcement
 # -------------------------
+@pytest.mark.unit
 def test_prompt_is_required():
     pred = Predictor()
     with pytest.raises(TypeError):
@@ -137,6 +138,7 @@ def test_prompt_is_required():
 # -------------------------
 # 3) Input() metadata/schemas match JSON contract
 # -------------------------
+@pytest.mark.unit
 def test_input_constraints_match_schema():
     # Inspect signature defaults (FieldInfo objects)
     sig = inspect.signature(Predictor.predict)
@@ -195,6 +197,7 @@ def test_input_constraints_match_schema():
 # -------------------------
 # 4) Invalid numeric inputs raise
 # -------------------------
+@pytest.mark.unit
 def test_invalid_numeric_inputs_raise(minimal_predictor):
     pred = minimal_predictor
 
@@ -218,6 +221,7 @@ def test_invalid_numeric_inputs_raise(minimal_predictor):
 # -------------------------
 # 5) predict() returns a string and side-effect is performed
 # -------------------------
+@pytest.mark.unit
 def test_predict_returns_string_and_writes(minimal_predictor, tmp_path, monkeypatch):
     pred = minimal_predictor
 

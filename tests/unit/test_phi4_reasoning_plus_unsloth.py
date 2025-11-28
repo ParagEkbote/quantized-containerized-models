@@ -4,9 +4,6 @@ import torch
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-# ---------------------------------------------------------------------------
-# FIX: Patch BEFORE any imports that use Unsloth
-# ---------------------------------------------------------------------------
 # Create mock objects
 class DummyTokenizer:
     eos_token_id = 1
