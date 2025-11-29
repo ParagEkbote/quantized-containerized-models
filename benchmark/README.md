@@ -1,5 +1,7 @@
 ## Model Deployment Benchmarking
 
+![alt text](docs/assets/hero_img_benchmark.webp)
+
 This benchmarking framework provides a standardized approach to evaluating model deployments on Replicate. It focuses on measuring real-world performance characteristics including latency, throughput, consistency and optimization effectiveness across different model types.
 
 ## Core Principles
@@ -40,7 +42,8 @@ All benchmarks follow a consistent structure:
    - Output samples (images, text)
 
 ## Output Artifacts
-JSON Results File
+
+1. JSON Results File
 Structured output containing:
 
 Deployment metadata
@@ -49,7 +52,7 @@ Individual run results
 Aggregated statistics
 Generated insights
 
-Execution Logs
+2. Execution Logs
 Timestamped logs with:
 
 Real-time progress updates
@@ -57,38 +60,12 @@ Success/failure indicators
 Performance summaries
 Error diagnostics
 
-Model Outputs
+3. Model Outputs
 
 Generated images with run numbering
 Text outputs in separate files
 URL references to Replicate storage
 
-## Usage Patterns
-
-1. Standard Benchmark 
-
-pythonbenchmark_model(
-    num_runs=3,           # Multiple runs for statistical validity
-    prompt="...",         # Task-specific input
-    seed=42,              # Reproducibility
-    **model_params        # Model-specific configuration
-)
-
-
-## Interpretation Guidelines
-What Good Performance Looks Like
-
-CV < 20%: Highly predictable, suitable for production
-Cold/Warm ratio < 2x: Efficient model loading/caching
-Success rate = 100%: Reliable deployment
-Consistent output quality: Deterministic behavior with seed
-
-Warning Signs
-
-High CV (>50%): Indicates resource contention or instability
-Frequent failures: Deployment configuration issues
-Excessive cold starts: Poor caching or resource allocation
-Variable output with fixed seed: Non-deterministic model behavior
 
 ## Extensibility
 Adding New Model Benchmarks
