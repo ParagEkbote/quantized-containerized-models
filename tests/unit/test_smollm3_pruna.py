@@ -1,6 +1,5 @@
 import inspect
 import pytest
-from cog import Input, BasePredictor
 from models.smollm3_pruna.predict import (
     Predictor,
     save_text,

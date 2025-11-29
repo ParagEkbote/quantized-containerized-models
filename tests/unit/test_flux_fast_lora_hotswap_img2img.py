@@ -1,11 +1,7 @@
 import inspect
 import pytest
 from pathlib import Path
-import torch
 from pydantic.fields import FieldInfo,  PydanticUndefined
-from pydantic import GetCoreSchemaHandler
-from pydantic import GetJsonSchemaHandler
-from pydantic import FieldValidationInfo
 from models.flux_fast_lora_hotswap_img2img.predict import (
     Predictor,
     save_image,

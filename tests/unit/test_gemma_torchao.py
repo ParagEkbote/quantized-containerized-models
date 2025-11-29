@@ -1,8 +1,6 @@
 import inspect
 import pytest
 import torch
-from pathlib import Path
-from types import SimpleNamespace
 
 from models.gemma_torchao.predict import (
     login_with_env_token,

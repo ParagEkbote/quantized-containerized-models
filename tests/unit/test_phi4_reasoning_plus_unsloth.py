@@ -2,7 +2,7 @@ import pytest
 import inspect
 import torch
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 # Create mock objects
 class DummyTokenizer:

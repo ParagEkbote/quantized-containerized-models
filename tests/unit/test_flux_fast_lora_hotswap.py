@@ -1,7 +1,6 @@
 import inspect
 from pathlib import Path
 import pytest
-from cog import Input
 from pydantic.fields import FieldInfo 
 
 from models.flux_fast_lora_hotswap.predict import (
