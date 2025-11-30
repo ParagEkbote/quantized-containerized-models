@@ -36,7 +36,10 @@ jobs:
 
           mapfile -t MODULES < <(
             find "$BENCH_DIR" -type f -name "benchmark.py" |
-            sed -e 's#/#.#g' -e 's#.py$##'
+            sed -e 's#^\./##' \
+                -e 's#^benchmark/#benchmark.#' \
+                -e 's#/#.#g' \
+                -e 's#\.py$##'
           )
 
           for module in "${MODULES[@]}"; do
