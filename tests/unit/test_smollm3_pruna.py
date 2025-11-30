@@ -2,7 +2,6 @@ import inspect
 import pytest
 from models.smollm3_pruna.predict import (
     Predictor,
-    save_text,
 )
 
 import torch

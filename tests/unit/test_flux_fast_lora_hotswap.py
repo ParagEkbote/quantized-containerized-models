@@ -5,7 +5,6 @@ from pydantic.fields import FieldInfo
 
 from models.flux_fast_lora_hotswap.predict import (
     Predictor,
-    save_image,
 )
 
 # ---------------------------------------------------------------------------

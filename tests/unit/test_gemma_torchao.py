@@ -3,12 +3,6 @@ import pytest
 import torch
 
 from models.gemma_torchao.predict import (
-    login_with_env_token,
-    save_output_to_file,
-    gemma_filter_fn,
-    magnitude_based_pruning,
-    format_chat_messages,
-    sanitize_weights_for_quantization,
     Predictor,
 )
 

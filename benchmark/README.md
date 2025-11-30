@@ -10,72 +10,64 @@ This benchmarking framework provides a standardized approach to evaluating model
 2. Multiple Run Analysis: Each benchmark performs multiple consecutive runs (typically 3-10) to capture performance variance and distinguish between cold start and warm execution patterns.
 3. Comprehensive Metrics: Beyond simple timing, benchmarks collect model-specific metrics like token throughput, output quality indicators, and resource utilization patterns.
 
-
 ## Benchmark Structure
 
 All benchmarks follow a consistent structure:
+
 1. Configuration & Setup
+
    - Deployment identification
    - Input parameter specification
    - Logging configuration
 
 2. Execution Loop
+
    - Sequential runs with timing
    - Output capture and validation
    - Error handling and recovery
 
 3. Statistical Analysis
+
    - Central tendency (mean, median)
    - Variability (std dev, coefficient of variation)
    - Cold start vs warm run comparison
    - Model-specific metrics
 
 4. Performance Insights
+
    - Threshold-based categorization
    - Optimization effectiveness
    - Stability assessment
    - Comparative benchmarking
 
 5. Artifact Generation
+
    - JSON results file
    - Detailed execution logs
    - Output samples (images, text)
 
 ## Output Artifacts
 
-1. JSON Results File
-Structured output containing:
+1. JSON Results File containing:
 
-Deployment metadata
-Input configuration
-Individual run results
-Aggregated statistics
-Generated insights
+ - Deployment metadata
+ - Input configuration
+ - Individual run results
+ - Aggregated statistics
+ - Generated insights
 
-2. Execution Logs
-Timestamped logs with:
+2. Execution Logs timestamped  with:
 
-Real-time progress updates
-Success/failure indicators
-Performance summaries
-Error diagnostics
+ - Real-time progress updates
+ - Success/failure indicators
+ - Performance summaries
+ - Error diagnostics
 
 3. Model Outputs
 
-Generated images with run numbering
-Text outputs in separate files
-URL references to Replicate storage
-
-
-## Extensibility
-Adding New Model Benchmarks
-
-1. Copy base structure from existing benchmark
-2. Adapt input schema to model requirements
-3. Add model-specific metric collection
-4. Define appropriate insight thresholds
-5. Configure output artifact handling
-
+ - Generated images with run numbering
+ - Text outputs in separate files
+ - URL references to Replicate storage
 
 ## Best Practices
 
