@@ -16,10 +16,7 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=lo
 # ----------------------------------------------------
 # Deployment ID (string, not tuple)
 # ----------------------------------------------------
-DEPLOYMENT_ID = (
-    "paragekbote/smollm3-3b-smashed:"
-    "232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
-)
+DEPLOYMENT_ID = "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
 
 BASE_INPUT = {
     "prompt": "Explain quantum computing in simple words.",

@@ -13,10 +13,7 @@ logger.setLevel(logging.INFO)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-DEPLOYMENT_ID = (
-    "paragekbote/phi-4-reasoning-plus-unsloth:"
-    "a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"
-)
+DEPLOYMENT_ID = "paragekbote/phi-4-reasoning-plus-unsloth:a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"
 
 BASE_INPUT = {
     "prompt": "Summarize the plot of Alice in Wonderland.",
@@ -97,6 +94,4 @@ def test_phi4_two_sampling_modes():
     unique_words_2 = len(set(out2.split()))
     logger.info(f"Unique word counts → stable: {unique_words_1}, creative: {unique_words_2}")
 
-    assert unique_words_2 >= unique_words_1 * 0.7, (
-        "Creative mode output does not appear significantly more varied"
-    )
+    assert unique_words_2 >= unique_words_1 * 0.7, "Creative mode output does not appear significantly more varied"

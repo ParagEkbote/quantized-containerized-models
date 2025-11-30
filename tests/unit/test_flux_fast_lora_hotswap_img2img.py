@@ -79,10 +79,7 @@ def test_predict_signature_stable():
         "seed",
     ]
 
-    assert [p.name for p in params] == expected, (
-        "Predict signature changed unexpectedly. "
-        f"Expected {expected}, got {[p.name for p in params]}"
-    )
+    assert [p.name for p in params] == expected, f"Predict signature changed unexpectedly. Expected {expected}, got {[p.name for p in params]}"
 
 
 # -----------------------------------------------------------------------------
@@ -102,9 +99,7 @@ def test_missing_required_fields_raise():
         assert isinstance(field, FieldInfo), f"{name} must be a FieldInfo (Cog Input)"
 
         # Cog marks required fields by the absence of a *default attribute*
-        assert field.default is PydanticUndefined, (
-            f"{name} must be required (no default), found default={field.default}"
-        )
+        assert field.default is PydanticUndefined, f"{name} must be required (no default), found default={field.default}"
 
     # Calling unbound method without required args must raise TypeError
     with pytest.raises(TypeError):
@@ -175,9 +170,7 @@ def test_invalid_numeric_arguments_raise():
 
     # num_inference_steps invalid
     with pytest.raises(Exception):
-        pred.predict(
-            prompt="hello", trigger_word="Cinematic", init_image="x.png", num_inference_steps=0
-        )
+        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png", num_inference_steps=0)
 
 
 # -----------------------------------------------------------------------------
@@ -215,9 +208,7 @@ def test_predict_returns_path(tmp_path, monkeypatch):
     pred.current_adapter = None
 
     # mock everything heavy:
-    monkeypatch.setattr(
-        "models.flux_fast_lora_hotswap_img2img.predict.load_image", lambda url: ImagePlaceholder()
-    )
+    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.load_image", lambda url: ImagePlaceholder())
 
     class DummyPipe:
         def set_adapters(self, names, adapter_weights):
@@ -261,9 +252,7 @@ def test_trigger_word_switching(monkeypatch):
     pred.current_adapter = "open-image-preferences"
 
     # Mock image
-    monkeypatch.setattr(
-        "models.flux_fast_lora_hotswap_img2img.predict.load_image", lambda url: ImagePlaceholder()
-    )
+    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.load_image", lambda url: ImagePlaceholder())
 
     class DummyPipe:
         def __init__(self):

@@ -42,9 +42,7 @@ def test_required_fields_are_required():
         assert isinstance(default, FieldInfo), f"{name} must be FieldInfo"
 
         # Verify the FieldInfo marks the field as required
-        assert default.default is None or str(default.default) == "PydanticUndefined", (
-            f"{name} must be required; got default={default.default}"
-        )
+        assert default.default is None or str(default.default) == "PydanticUndefined", f"{name} must be required; got default={default.default}"
 
     # Test that calling unbound method without self raises TypeError
     with pytest.raises(TypeError, match="missing 1 required positional argument: 'self'"):

@@ -120,9 +120,7 @@ def gradual_magnitude_pruning(
 ):
     current_sparsity = target_sparsity * min(current_step / total_steps, 1.0)
     progress_percent = min(current_step / total_steps * 100, 100)
-    print(
-        f"\n[Gradual Pruning] Step {current_step}/{total_steps} ({progress_percent:.1f}%) - Current sparsity: {current_sparsity:.2%}"
-    )
+    print(f"\n[Gradual Pruning] Step {current_step}/{total_steps} ({progress_percent:.1f}%) - Current sparsity: {current_sparsity:.2%}")
 
     total_pruned = 0
     total_weights = 0
@@ -141,15 +139,10 @@ def gradual_magnitude_pruning(
                 num_pruned = weight.numel() - mask.sum().item()
                 weight *= mask.view_as(weight)
                 total_pruned += num_pruned
-                print(
-                    f"  Layer '{name}': pruned {num_pruned}/{weight.numel()} weights "
-                    f"({num_pruned / weight.numel():.2%})"
-                )
+                print(f"  Layer '{name}': pruned {num_pruned}/{weight.numel()} weights ({num_pruned / weight.numel():.2%})")
 
     actual_sparsity = total_pruned / total_weights if total_weights > 0 else 0
-    print(
-        f"  Total progress: {total_pruned}/{total_weights} weights pruned ({actual_sparsity:.2%})"
-    )
+    print(f"  Total progress: {total_pruned}/{total_weights} weights pruned ({actual_sparsity:.2%})")
     return current_sparsity
 
 
@@ -198,9 +191,7 @@ def layer_norm_pruning(model, sparsity_ratio: float = 0.3, filter_fn=None):
                     total_pruned += pruned_count
 
                     layer_norm = layer_importance.get(name, 0)
-                    print(
-                        f"  Layer '{name}' (norm: {layer_norm:.6f}): pruned {pruned_count}/{weight.numel()} weights"
-                    )
+                    print(f"  Layer '{name}' (norm: {layer_norm:.6f}): pruned {pruned_count}/{weight.numel()} weights")
 
     actual_sparsity = total_pruned / total_params if total_params > 0 else 0
     print(f"  Total pruned: {total_pruned}/{total_params} weights ({actual_sparsity:.2%})")
@@ -243,9 +234,7 @@ def sanitize_weights_for_quantization(model: torch.nn.Module):
             w = module.weight
             if w.is_meta:
                 continue
-            if hasattr(w, "__sparse_coo_tensor_unsafe__") or "SparseSemiStructured" in str(
-                type(w)
-            ):
+            if hasattr(w, "__sparse_coo_tensor_unsafe__") or "SparseSemiStructured" in str(type(w)):
                 continue
             try:
                 new_w = w.detach().contiguous()
@@ -298,9 +287,7 @@ class Predictor(BasePredictor):
 
         # Compile frequently used layers
         if hasattr(self.model.language_model, "embed_tokens"):
-            self.model.language_model.embed_tokens = torch.compile(
-                self.model.language_model.embed_tokens
-            )
+            self.model.language_model.embed_tokens = torch.compile(self.model.language_model.embed_tokens)
         if hasattr(self.model, "lm_head"):
             self.model.lm_head = torch.compile(self.model.lm_head)
 
@@ -308,21 +295,13 @@ class Predictor(BasePredictor):
         self,
         prompt: str = Input(description="Input text prompt"),
         image_url: str | None = Input(description="Optional image URL", default=None),
-        max_new_tokens: int = Input(
-            default=128, ge=1, le=2500, description="Maximum number of new tokens"
-        ),
-        temperature: float = Input(
-            default=0.7, description="Sampling temperature", ge=0.0, le=2.0
-        ),
+        max_new_tokens: int = Input(default=128, ge=1, le=2500, description="Maximum number of new tokens"),
+        temperature: float = Input(default=0.7, description="Sampling temperature", ge=0.0, le=2.0),
         top_p: float = Input(default=0.9, description="Top-p nucleus sampling", ge=0.0, le=1.0),
         seed: int = Input(default=42, description="Seed for reproducibility"),
-        use_quantization: str = Input(
-            default="true", description="Enable INT8 quantization using torchao"
-        ),
+        use_quantization: str = Input(default="true", description="Enable INT8 quantization using torchao"),
         use_sparsity: str = Input(default="false", description="Enable sparsity optimization"),
-        sparsity_type: str = Input(
-            default="magnitude", description="Type of sparsity: magnitude, gradual, layer_norm"
-        ),
+        sparsity_type: str = Input(default="magnitude", description="Type of sparsity: magnitude, gradual, layer_norm"),
         sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.8),
     ) -> str:
         torch.manual_seed(seed)
@@ -356,9 +335,7 @@ class Predictor(BasePredictor):
         # Format messages
         messages = format_chat_messages(prompt, image_url if image else None)
         try:
-            formatted_prompt = self.processor.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
+            formatted_prompt = self.processor.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         except Exception as e:
             print(f"Warning: Chat template failed, using raw prompt: {e}")
             formatted_prompt = prompt
@@ -404,9 +381,7 @@ class Predictor(BasePredictor):
             decoded = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
             input_length = inputs["input_ids"].shape[1]
             generated_tokens = outputs[0][input_length:]
-            generated_text = self.processor.tokenizer.decode(
-                generated_tokens, skip_special_tokens=True
-            )
+            generated_text = self.processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
             final_output = generated_text.strip() if generated_text.strip() else decoded
         except Exception as e:
             print(f"Decoding error: {e}")

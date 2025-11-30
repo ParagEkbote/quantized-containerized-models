@@ -154,9 +154,7 @@ def test_predict_returns_path(tmp_path, monkeypatch):
     )
 
     # Explicitly pass all parameter values
-    result = pred.predict(
-        prompt="hello", max_new_tokens=3000, temperature=0.7, top_p=0.95, seed=42
-    )
+    result = pred.predict(prompt="hello", max_new_tokens=3000, temperature=0.7, top_p=0.95, seed=42)
 
     assert isinstance(result, Path)
     assert result.name == "out.txt"

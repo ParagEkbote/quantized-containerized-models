@@ -99,20 +99,13 @@ class Predictor(BasePredictor):
             self.pipe.set_adapters(["flux-ghibsky"], adapter_weights=[0.8])
             self.current_adapter = "flux-ghibsky"
 
-        elif (
-            trigger_word in self.lora1_triggers
-            and self.current_adapter != "open-image-preferences"
-        ):
+        elif trigger_word in self.lora1_triggers and self.current_adapter != "open-image-preferences":
             self.pipe.set_adapters(["open-image-preferences"], adapter_weights=[1.0])
             self.current_adapter = "open-image-preferences"
 
         # Compile only once if needed — here assumed every time
-        self.pipe.text_encoder = torch.compile(
-            self.pipe.text_encoder, fullgraph=False, mode="reduce-overhead"
-        )
-        self.pipe.text_encoder_2 = torch.compile(
-            self.pipe.text_encoder_2, fullgraph=False, mode="reduce-overhead"
-        )
+        self.pipe.text_encoder = torch.compile(self.pipe.text_encoder, fullgraph=False, mode="reduce-overhead")
+        self.pipe.text_encoder_2 = torch.compile(self.pipe.text_encoder_2, fullgraph=False, mode="reduce-overhead")
         self.pipe.vae = torch.compile(self.pipe.vae, fullgraph=False, mode="reduce-overhead")
 
         pipe_kwargs = {

@@ -46,9 +46,7 @@ class Predictor(BasePredictor):
     def predict(
         self,
         prompt: str = Input(description="Input text prompt"),
-        max_new_tokens: int = Input(
-            description="Maximum number of new tokens", default=3000, ge=1, le=25000
-        ),
+        max_new_tokens: int = Input(description="Maximum number of new tokens", default=3000, ge=1, le=25000),
         temperature: float = Input(description="Sampling temperature", default=0.7, ge=0.1, le=1),
         top_p: float = Input(description="Top-p nucleus sampling", default=0.95, ge=0.1, le=1),
         seed: int = Input(description="Random seed", default=42),

@@ -21,10 +21,7 @@ def test_predict_function_signature_stable():
 
     # Expected signature order
     expected = ["prompt", "max_new_tokens", "mode", "seed"]
-    assert [p.name for p in params] == expected, (
-        "Predict function signature has changed. "
-        f"Expected {expected}, got {[p.name for p in params]}"
-    )
+    assert [p.name for p in params] == expected, f"Predict function signature has changed. Expected {expected}, got {[p.name for p in params]}"
 
 
 # ---------------------------------------------------------------------------
@@ -151,9 +148,7 @@ def test_predict_returns_path(tmp_path, monkeypatch):
     pred.cache_length = 2048
 
     # Mock save_text
-    monkeypatch.setattr(
-        "models.smollm3_pruna.predict.save_text", lambda *args, **kwargs: tmp_path / "out.txt"
-    )
+    monkeypatch.setattr("models.smollm3_pruna.predict.save_text", lambda *args, **kwargs: tmp_path / "out.txt")
 
     result = pred.predict(prompt="hello", max_new_tokens=512, mode="no_think", seed=-1)
 

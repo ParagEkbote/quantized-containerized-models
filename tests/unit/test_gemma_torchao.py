@@ -96,8 +96,7 @@ def minimal_predictor(monkeypatch, tmp_path):
     try:
         monkeypatch.setattr(
             "models.gemma_torchao.predict.save_output_to_file",
-            lambda text, output_folder=tmp_path, seed=None, index=None, filename=None: tmp_path
-            / "out.txt",
+            lambda text, output_folder=tmp_path, seed=None, index=None, filename=None: tmp_path / "out.txt",
         )
     except Exception:
         # best effort — if path differs, user should update import path above
@@ -173,21 +172,13 @@ def test_input_constraints_match_schema():
 
     # max_new_tokens: integer 1..2500
     max_tok_constraints = get_constraints(max_new_tokens_meta)
-    assert max_tok_constraints.get("ge") == 1, (
-        f"Expected max_new_tokens ge=1, got {max_tok_constraints}"
-    )
-    assert max_tok_constraints.get("le") == 2500, (
-        f"Expected max_new_tokens le=2500, got {max_tok_constraints}"
-    )
+    assert max_tok_constraints.get("ge") == 1, f"Expected max_new_tokens ge=1, got {max_tok_constraints}"
+    assert max_tok_constraints.get("le") == 2500, f"Expected max_new_tokens le=2500, got {max_tok_constraints}"
 
     # temperature: 0..2
     temp_constraints = get_constraints(temperature_meta)
-    assert temp_constraints.get("ge") == 0.0, (
-        f"Expected temperature ge=0.0, got {temp_constraints}"
-    )
-    assert temp_constraints.get("le") == 2.0, (
-        f"Expected temperature le=2.0, got {temp_constraints}"
-    )
+    assert temp_constraints.get("ge") == 0.0, f"Expected temperature ge=0.0, got {temp_constraints}"
+    assert temp_constraints.get("le") == 2.0, f"Expected temperature le=2.0, got {temp_constraints}"
 
     # top_p: 0..1
     top_p_constraints = get_constraints(top_p_meta)
@@ -196,12 +187,8 @@ def test_input_constraints_match_schema():
 
     # sparsity_ratio: 0..0.8
     sparsity_constraints = get_constraints(sparsity_ratio_meta)
-    assert sparsity_constraints.get("ge") == 0.0, (
-        f"Expected sparsity_ratio ge=0.0, got {sparsity_constraints}"
-    )
-    assert sparsity_constraints.get("le") == 0.8, (
-        f"Expected sparsity_ratio le=0.8, got {sparsity_constraints}"
-    )
+    assert sparsity_constraints.get("ge") == 0.0, f"Expected sparsity_ratio ge=0.0, got {sparsity_constraints}"
+    assert sparsity_constraints.get("le") == 0.8, f"Expected sparsity_ratio le=0.8, got {sparsity_constraints}"
 
     # Verify FieldInfo objects exist (not checking descriptions as they may be optional)
     assert max_new_tokens_meta is not None
@@ -248,8 +235,7 @@ def test_predict_returns_string_and_writes(minimal_predictor, tmp_path, monkeypa
     # ensure saved file path deterministic
     monkeypatch.setattr(
         "models.gemma_torchao.predict.save_output_to_file",
-        lambda text, output_folder=tmp_path, seed=None, index=None, filename=None: tmp_path
-        / "out.txt",
+        lambda text, output_folder=tmp_path, seed=None, index=None, filename=None: tmp_path / "out.txt",
     )
 
     # Explicitly pass all parameters to avoid FieldInfo objects
@@ -272,6 +258,4 @@ def test_predict_returns_string_and_writes(minimal_predictor, tmp_path, monkeypa
     # verify that the save utility was invoked by checking file exists
     # (our monkeypatched function returns a path; if original implementation was used it would create file)
     saved = tmp_path / "out.txt"
-    assert (
-        saved.exists() or True
-    )  # existence can't be guaranteed if original function not used; keep soft check
+    assert saved.exists() or True  # existence can't be guaranteed if original function not used; keep soft check

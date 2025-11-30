@@ -105,12 +105,8 @@ class Predictor(BasePredictor):
         self.lora2_triggers = {"GHIBSKY"}
 
         # Always compile key components
-        self.pipe.text_encoder = torch.compile(
-            self.pipe.text_encoder, fullgraph=False, mode="reduce-overhead"
-        )
-        self.pipe.text_encoder_2 = torch.compile(
-            self.pipe.text_encoder_2, fullgraph=False, mode="reduce-overhead"
-        )
+        self.pipe.text_encoder = torch.compile(self.pipe.text_encoder, fullgraph=False, mode="reduce-overhead")
+        self.pipe.text_encoder_2 = torch.compile(self.pipe.text_encoder_2, fullgraph=False, mode="reduce-overhead")
         self.pipe.vae = torch.compile(self.pipe.vae, fullgraph=False, mode="reduce-overhead")
 
     def predict(
@@ -118,27 +114,20 @@ class Predictor(BasePredictor):
         prompt: str = Input(description="Prompt for image generation."),
         trigger_word: str = Input(description="Trigger word to select LoRA."),
         init_image: str = Input(description="Initial image (URL)."),
-        strength: float = Input(
-            description="Strength of transformation.", default=0.6, ge=0, le=1
-        ),
+        strength: float = Input(description="Strength of transformation.", default=0.6, ge=0, le=1),
         guidance_scale: float = Input(
             description="Classifier-free guidance scale follows the text prompt.",
             default=7.5,
             ge=0,
         ),
-        num_inference_steps: int = Input(
-            description="Number of denoising steps for image generation.", default=28, ge=1
-        ),
+        num_inference_steps: int = Input(description="Number of denoising steps for image generation.", default=28, ge=1),
         seed: int = Input(description="Random seed.", default=42),
     ) -> Path:
         # Pick adapter
         if trigger_word in self.lora2_triggers and self.current_adapter != "flux-ghibsky":
             self.pipe.set_adapters(["flux-ghibsky"], adapter_weights=[0.8])
             self.current_adapter = "flux-ghibsky"
-        elif (
-            trigger_word in self.lora1_triggers
-            and self.current_adapter != "open-image-preferences"
-        ):
+        elif trigger_word in self.lora1_triggers and self.current_adapter != "open-image-preferences":
             self.pipe.set_adapters(["open-image-preferences"], adapter_weights=[1.0])
             self.current_adapter = "open-image-preferences"
 

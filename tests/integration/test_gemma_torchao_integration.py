@@ -12,10 +12,7 @@ import replicate
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-DEPLOYMENT_ID = (
-    "paragekbote/gemma3-torchao-quant-sparse:"
-    "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
-)
+DEPLOYMENT_ID = "paragekbote/gemma3-torchao-quant-sparse:44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
 
 
 BASE_INPUT = {
@@ -27,9 +24,7 @@ BASE_INPUT = {
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(
-    "REPLICATE_API_TOKEN" not in os.environ, reason="Replicate API token not found in environment"
-)
+@pytest.mark.skipif("REPLICATE_API_TOKEN" not in os.environ, reason="Replicate API token not found in environment")
 def test_gemma_two_configs():
     """
     Integration test for Gemma-3-4b-it style predictor:

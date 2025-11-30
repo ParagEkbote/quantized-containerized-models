@@ -11,9 +11,7 @@ import replicate
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-DEPLOYMENT_ID = (
-    "flux-fast-lora-hotswap:a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
-)
+DEPLOYMENT_ID = "flux-fast-lora-hotswap:a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
 
 
 @pytest.mark.integration
@@ -52,9 +50,7 @@ def test_flux_fast_lora_two_modes():
 
         # Basic sanity checks
         assert isinstance(prediction_output, str), "Output must be a string path or URL"
-        assert prediction_output.endswith(".png") or prediction_output.startswith("http"), (
-            f"Unexpected output format: {prediction_output}"
-        )
+        assert prediction_output.endswith(".png") or prediction_output.startswith("http"), f"Unexpected output format: {prediction_output}"
         assert elapsed_time < 60, f"Generation too slow: {elapsed_time:.2f} seconds"
 
         results.append((request_params, prediction_output, elapsed_time))
@@ -63,10 +59,7 @@ def test_flux_fast_lora_two_modes():
     (req1, image_one, time_one), (req2, image_two, time_two) = results
 
     # Images should be DIFFERENT across two adapters
-    assert image_one != image_two, (
-        "Outputs for 'Anime' (LoRA1) and 'GHIBSKY' (LoRA2) should differ, "
-        "which indicates correct adapter switching."
-    )
+    assert image_one != image_two, "Outputs for 'Anime' (LoRA1) and 'GHIBSKY' (LoRA2) should differ, which indicates correct adapter switching."
 
     # Ensure generation times are within sane ratio
     time_ratio = time_one / time_two

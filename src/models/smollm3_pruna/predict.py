@@ -51,9 +51,7 @@ class Predictor(BasePredictor):
     def predict(
         self,
         prompt: str = Input(description="Prompt for text generation"),
-        max_new_tokens: int = Input(
-            description="Maximum number of new tokens to generate", default=512, ge=1, le=16384
-        ),
+        max_new_tokens: int = Input(description="Maximum number of new tokens to generate", default=512, ge=1, le=16384),
         mode: str = Input(description="Reasoning mode: 'think' or 'no_think'", default="no_think"),
         seed: int = Input(description="Seed for reproducibility", default=-1),
     ) -> Path:
