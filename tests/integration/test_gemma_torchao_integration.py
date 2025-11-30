@@ -3,6 +3,13 @@ import os
 import pytest
 import replicate
 import time
+import logging
+
+# -----------------------------------------------------
+# Logging configuration
+# -----------------------------------------------------
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 DEPLOYMENT_ID = (
     "paragekbote/gemma3-torchao-quant-sparse:"

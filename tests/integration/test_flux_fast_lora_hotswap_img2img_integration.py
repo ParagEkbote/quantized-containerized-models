@@ -3,6 +3,13 @@ import os
 import time
 import pytest
 import replicate
+import logging
+
+# -----------------------------------------------------
+# Logging configuration
+# -----------------------------------------------------
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # -----------------------------------------------------------
 # Replace with your actual Replicate deployment ID
