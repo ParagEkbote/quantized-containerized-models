@@ -32,12 +32,12 @@ def _calculate_efficiency_rating(tokens_per_sec):
 def benchmark_gemma3_vlm(num_runs=3):
     """
     Benchmark the Gemma3 TorchAO Quantized Sparse Vision-Language Model.
-    
+
     Args:
         num_runs: Number of benchmark runs (default: 3)
     """
     deployment_id = "paragekbote/gemma3-torchao-quant-sparse:44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
-    
+
     # Test with a vision task
     input_params = {
         "prompt": "Describe the image in the photo. What type of breads are in the image and from what region are they?",
@@ -51,7 +51,7 @@ def benchmark_gemma3_vlm(num_runs=3):
         "use_quantization": "true",
         "sparsity_ratio": 0.3
     }
-    
+
     logger.info("="*70)
     logger.info("Gemma3 TorchAO Quantized Sparse VLM Benchmark")
     logger.info("="*70)
@@ -62,7 +62,7 @@ def benchmark_gemma3_vlm(num_runs=3):
     logger.info(f"Optimizations: Sparsity={input_params['use_sparsity']}, Quantization={input_params['use_quantization']}")
     logger.info(f"Sparsity Type: {input_params['sparsity_type']}, Ratio: {input_params['sparsity_ratio']}")
     logger.info("="*70)
-    
+
     results = {
         "deployment_id": deployment_id,
         "deployment_name": "Gemma3-TorchAO-Quant-Sparse-VLM",
@@ -77,30 +77,30 @@ def benchmark_gemma3_vlm(num_runs=3):
         },
         "runs": []
     }
-    
+
     run_times = []
     token_counts = []
-    
+
     for run_num in range(1, num_runs + 1):
         logger.info(f"--- Run {run_num}/{num_runs} ---")
-        
+
         try:
             start_time = time.time()
-            
+
             # Run the model
             output = replicate.run(deployment_id, input=input_params)
-            
+
             end_time = time.time()
             elapsed_time = end_time - start_time
-            
+
             # Get output text
             output_text = str(output)
             output_length = len(output_text)
             word_count = len(output_text.split())
-            
+
             run_times.append(elapsed_time)
             token_counts.append(word_count)
-            
+
             # Store run details
             run_result = {
                 "run_number": run_num,
@@ -111,11 +111,11 @@ def benchmark_gemma3_vlm(num_runs=3):
                 "status": "success"
             }
             results["runs"].append(run_result)
-            
+
             logger.info(f"✓ Completed in {elapsed_time:.2f}s")
             logger.info(f"  Output: {output_length} characters, ~{word_count} words")
             logger.info(f"  Tokens/sec: {word_count/elapsed_time:.2f}")
-            
+
             # Save individual output
             with open(f"gemma3_vlm_output_run_{run_num}.txt", "w") as f:
                 f.write(f"=== Run {run_num} ===\n")
@@ -123,18 +123,18 @@ def benchmark_gemma3_vlm(num_runs=3):
                 f.write(f"Image: {input_params['image_url']}\n")
                 f.write(f"Time: {elapsed_time:.2f}s\n")
                 f.write(f"\n{output_text}")
-            
+
         except Exception as e:
             error_msg = str(e)
             logger.error(f"✗ Failed: {error_msg}")
-            
+
             run_result = {
                 "run_number": run_num,
                 "status": "failed",
                 "error": error_msg
             }
             results["runs"].append(run_result)
-    
+
     # Calculate statistics
     if run_times:
         avg_time = sum(run_times) / len(run_times)
@@ -142,19 +142,19 @@ def benchmark_gemma3_vlm(num_runs=3):
         max_time = max(run_times)
         avg_words = sum(token_counts) / len(token_counts) if token_counts else 0
         avg_tokens_per_sec = avg_words / avg_time if avg_time > 0 else 0
-        
+
         # Calculate additional metrics
         time_std_dev = (sum((t - avg_time) ** 2 for t in run_times) / len(run_times)) ** 0.5
         time_variance_coefficient = (time_std_dev / avg_time * 100) if avg_time > 0 else 0
-        
+
         # Time to first token (cold start) vs subsequent runs
         cold_start_time = run_times[0] if run_times else None
         warm_run_times = run_times[1:] if len(run_times) > 1 else []
         avg_warm_time = sum(warm_run_times) / len(warm_run_times) if warm_run_times else None
-        
+
         # Output consistency
         word_std_dev = (sum((w - avg_words) ** 2 for w in token_counts) / len(token_counts)) ** 0.5 if len(token_counts) > 1 else 0
-        
+
         results["statistics"] = {
             "successful_runs": len(run_times),
             "failed_runs": num_runs - len(run_times),
@@ -172,35 +172,35 @@ def benchmark_gemma3_vlm(num_runs=3):
             "consistency_score": max(0, 100 - time_variance_coefficient),
             "efficiency_rating": _calculate_efficiency_rating(avg_tokens_per_sec)
         }
-        
+
         # Performance insights
         insights = []
-        
+
         # Cold start analysis
         if cold_start_time and avg_warm_time and cold_start_time > avg_warm_time * 1.5:
             insights.append(f"Significant cold start delay detected: {cold_start_time:.2f}s vs {avg_warm_time:.2f}s warm average")
-        
+
         # Consistency analysis
         if time_variance_coefficient > 50:
             insights.append(f"High variability in response times (CV: {time_variance_coefficient:.1f}%) - inconsistent performance")
         elif time_variance_coefficient < 20:
             insights.append(f"Excellent consistency (CV: {time_variance_coefficient:.1f}%) - predictable performance")
-        
+
         # Throughput analysis for VLM
         if avg_tokens_per_sec < 5:
             insights.append(f"Low throughput: {avg_tokens_per_sec:.2f} tokens/sec - typical for VLMs with image processing overhead")
         elif avg_tokens_per_sec > 15:
             insights.append(f"High throughput: {avg_tokens_per_sec:.2f} tokens/sec - excellent for vision-language model")
-        
+
         # Output consistency
         if word_std_dev > avg_words * 0.2:
             insights.append(f"Variable output lengths (±{word_std_dev:.0f} words) - may indicate non-deterministic behavior despite seed")
-        
+
         # Optimization impact
         insights.append(f"Model uses sparsity ({input_params['sparsity_type']}, ratio={input_params['sparsity_ratio']}) and quantization for efficiency")
-        
+
         results["insights"] = insights
-        
+
         # Print summary
         logger.info("")
         logger.info("="*70)
@@ -215,32 +215,32 @@ def benchmark_gemma3_vlm(num_runs=3):
         logger.info(f"Average throughput: {results['statistics']['avg_tokens_per_sec']:.2f} tokens/sec")
         logger.info(f"Efficiency rating: {results['statistics']['efficiency_rating']}")
         logger.info(f"Consistency score: {results['statistics']['consistency_score']:.1f}/100")
-        
+
         if results['statistics']['cold_start_time'] and results['statistics']['avg_warm_time']:
             logger.info(f"Cold start: {results['statistics']['cold_start_time']:.2f}s")
             logger.info(f"Warm runs avg: {results['statistics']['avg_warm_time']:.2f}s")
             logger.info(f"Cold/Warm ratio: {results['statistics']['cold_vs_warm_ratio']:.2f}x")
-        
+
         if results.get('insights'):
             logger.info("")
             logger.info("PERFORMANCE INSIGHTS:")
             for insight in results['insights']:
                 logger.info(f"  • {insight}")
-        
+
         logger.info("="*70)
     else:
         logger.warning("All runs failed. No statistics available.")
         results["statistics"] = None
-    
+
     # Save results to JSON
     with open("gemma3_vlm_benchmark_results.json", "w") as f:
         json.dump(results, f, indent=2)
-    
+
     logger.info("")
     logger.info("✓ Detailed results saved to gemma3_vlm_benchmark_results.json")
     logger.info("✓ Individual outputs saved to gemma3_vlm_output_run_*.txt")
     logger.info("✓ Full log saved to gemma3_vlm_benchmark.log")
-    
+
     return results
 
 

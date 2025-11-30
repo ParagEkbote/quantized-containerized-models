@@ -93,7 +93,7 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
         for name, module in model.named_modules():
             if filter_fn and not filter_fn(module, name):
                 continue
-            if hasattr(module, 'weight') and isinstance(module.weight, torch.Tensor):
+            if hasattr(module, "weight") and isinstance(module.weight, torch.Tensor):
                 weight = module.weight.data
                 flat_weights = weight.abs().flatten().float()
                 try:
@@ -104,7 +104,7 @@ def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
                     threshold = topk_vals[-1]
                     mask = weight.abs() >= threshold
                     weight.mul_(mask)
-                    module.register_buffer('sparse_mask', mask)
+                    module.register_buffer("sparse_mask", mask)
                     sparsity_achieved = (weight == 0).float().mean().item()
                     print(f"Layer {name}: {sparsity_achieved:.2%} sparsity achieved")
                 except RuntimeError as e:
@@ -167,7 +167,7 @@ def layer_norm_pruning(model, sparsity_ratio: float = 0.3, filter_fn=None):
     for name, module in model.named_modules():
         if filter_fn and not filter_fn(module, name):
             continue
-        if isinstance(module, nn.Linear) and hasattr(module, 'weight'):
+        if isinstance(module, nn.Linear) and hasattr(module, "weight"):
             weight = module.weight.data
             # Use mean L2 norm as layer importance
             layer_importance[name] = weight.norm(p=2).item() / weight.numel()
@@ -182,7 +182,7 @@ def layer_norm_pruning(model, sparsity_ratio: float = 0.3, filter_fn=None):
         for name, module in model.named_modules():
             if filter_fn and not filter_fn(module, name):
                 continue
-            if isinstance(module, nn.Linear) and hasattr(module, 'weight'):
+            if isinstance(module, nn.Linear) and hasattr(module, "weight"):
                 weight = module.weight.data
                 total_params += weight.numel()
 
@@ -243,7 +243,7 @@ def sanitize_weights_for_quantization(model: torch.nn.Module):
             w = module.weight
             if w.is_meta:
                 continue
-            if hasattr(w, '__sparse_coo_tensor_unsafe__') or 'SparseSemiStructured' in str(
+            if hasattr(w, "__sparse_coo_tensor_unsafe__") or "SparseSemiStructured" in str(
                 type(w)
             ):
                 continue
@@ -402,7 +402,7 @@ class Predictor(BasePredictor):
         # Decode output
         try:
             decoded = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
-            input_length = inputs['input_ids'].shape[1]
+            input_length = inputs["input_ids"].shape[1]
             generated_tokens = outputs[0][input_length:]
             generated_text = self.processor.tokenizer.decode(
                 generated_tokens, skip_special_tokens=True

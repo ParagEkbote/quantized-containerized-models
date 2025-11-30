@@ -1,9 +1,10 @@
 # tests/integration/test_gemma_torchao.py
+import logging
 import os
 import time
+
 import pytest
 import replicate
-import logging
 
 # -----------------------------------------------------
 # Logging configuration
@@ -16,7 +17,8 @@ logger.setLevel(logging.INFO)
 # -----------------------------------------------------------
 DEPLOYMENT_ID = (
     "paragekbote/flux-fast-lora-hotswap-img2img:"
-    "e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd")
+    "e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
+)
 
 
 BASE_INPUT = {
@@ -31,8 +33,7 @@ BASE_INPUT = {
 
 @pytest.mark.integration
 @pytest.mark.skipif(
-    "REPLICATE_API_TOKEN" not in os.environ,
-    reason="Replicate API token not found"
+    "REPLICATE_API_TOKEN" not in os.environ, reason="Replicate API token not found"
 )
 def test_gemma_torchao_two_paths():
     """

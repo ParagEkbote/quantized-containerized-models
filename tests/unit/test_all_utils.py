@@ -1,31 +1,30 @@
 import os
+
 import pytest
 import torch
 import torch.nn as nn
 from PIL import Image
 
-from models.flux_fast_lora_hotswap_img2img.predict import (
-    save_image,
-    load_image,
-)
-
-from models.smollm3_pruna.predict import (
-    save_text,
-)
 from models.flux_fast_lora_hotswap.predict import (
     save_image,
 )
-
+from models.flux_fast_lora_hotswap_img2img.predict import (
+    load_image,
+    save_image,
+)
 from models.gemma_torchao.predict import (
-    login_with_env_token,
-    save_output_to_file,
-    gemma_filter_fn,
-    magnitude_based_pruning,
-    gradual_magnitude_pruning,
-    layer_norm_pruning,
     apply_safe_sparsity,
     format_chat_messages,
+    gemma_filter_fn,
+    gradual_magnitude_pruning,
+    layer_norm_pruning,
+    login_with_env_token,
+    magnitude_based_pruning,
     sanitize_weights_for_quantization,
+    save_output_to_file,
+)
+from models.smollm3_pruna.predict import (
+    save_text,
 )
 
 
@@ -34,6 +33,7 @@ from models.gemma_torchao.predict import (
 # =======================================================
 class TinyLinearModel(nn.Module):
     """Small model for pruning tests."""
+
     def __init__(self):
         super().__init__()
         self.fc1 = nn.Linear(4, 4)
@@ -126,8 +126,7 @@ def test_magnitude_based_pruning_runs():
 @pytest.mark.unit
 def test_gradual_magnitude_pruning_runs():
     model = TinyLinearModel()
-    s = gradual_magnitude_pruning(model, target_sparsity=0.5,
-                                  current_step=20, total_steps=100)
+    s = gradual_magnitude_pruning(model, target_sparsity=0.5, current_step=20, total_steps=100)
     assert 0 <= s <= 0.5
 
 
@@ -137,8 +136,7 @@ def test_gradual_magnitude_pruning_runs():
 @pytest.mark.unit
 def test_layer_norm_pruning_runs():
     model = TinyLinearModel()
-    sparsity = layer_norm_pruning(model, sparsity_ratio=0.2,
-                                  filter_fn=gemma_filter_fn)
+    sparsity = layer_norm_pruning(model, sparsity_ratio=0.2, filter_fn=gemma_filter_fn)
     assert 0 <= sparsity <= 1
 
 

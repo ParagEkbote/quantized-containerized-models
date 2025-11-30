@@ -1,11 +1,12 @@
 import inspect
+from pathlib import Path
+
 import pytest
+import torch
+
 from models.smollm3_pruna.predict import (
     Predictor,
 )
-
-import torch
-from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +36,7 @@ def test_required_fields_are_enforced():
     pred.cache_length = 2048
 
     with pytest.raises(TypeError):
-        pred.predict()   # Missing required parameter "prompt"
+        pred.predict()  # Missing required parameter "prompt"
 
 
 # ---------------------------------------------------------------------------
@@ -44,40 +45,40 @@ def test_required_fields_are_enforced():
 @pytest.mark.unit
 def test_input_constraints_intact():
     pred = Predictor()
-    
+
     # Get the actual signature to inspect defaults properly
     sig = inspect.signature(pred.predict)
     params = sig.parameters
-    
+
     # Check max_new_tokens
-    max_new_tokens_param = params['max_new_tokens']
+    max_new_tokens_param = params["max_new_tokens"]
     max_new_tokens_meta = max_new_tokens_param.default
-    
+
     # Verify it's a FieldInfo object (Cog Input)
-    assert hasattr(max_new_tokens_meta, 'metadata'), "max_new_tokens should be a Cog Input"
-    
+    assert hasattr(max_new_tokens_meta, "metadata"), "max_new_tokens should be a Cog Input"
+
     # Check for constraints in metadata
     constraints = {}
     for item in max_new_tokens_meta.metadata:
-        if hasattr(item, 'ge'):
-            constraints['ge'] = item.ge
-        if hasattr(item, 'le'):
-            constraints['le'] = item.le
-    
-    assert constraints.get('ge') == 1, "max_new_tokens minimum should be 1"
-    assert constraints.get('le') == 16384, "max_new_tokens maximum should be 16384"
-    
+        if hasattr(item, "ge"):
+            constraints["ge"] = item.ge
+        if hasattr(item, "le"):
+            constraints["le"] = item.le
+
+    assert constraints.get("ge") == 1, "max_new_tokens minimum should be 1"
+    assert constraints.get("le") == 16384, "max_new_tokens maximum should be 16384"
+
     # Check mode parameter
-    mode_param = params['mode']
+    mode_param = params["mode"]
     mode_meta = mode_param.default
     assert "think" in mode_meta.description.lower()
     assert "no_think" in mode_meta.description.lower()
-    
+
     # Check seed parameter
-    seed_param = params['seed']
+    seed_param = params["seed"]
     seed_meta = seed_param.default
     assert "seed" in seed_meta.description.lower()
-    
+
     # Verify descriptions exist
     assert max_new_tokens_meta.description is not None
     assert mode_meta.description is not None
@@ -125,7 +126,7 @@ def test_predict_returns_path(tmp_path, monkeypatch):
     class MockTok:
         pad_token = "x"
         eos_token = "x"
-        eos_token_id = 2  
+        eos_token_id = 2
 
         def apply_chat_template(self, *args, **kwargs):
             return "text"
@@ -151,15 +152,10 @@ def test_predict_returns_path(tmp_path, monkeypatch):
 
     # Mock save_text
     monkeypatch.setattr(
-        "models.smollm3_pruna.predict.save_text",
-        lambda *args, **kwargs: tmp_path / "out.txt"
+        "models.smollm3_pruna.predict.save_text", lambda *args, **kwargs: tmp_path / "out.txt"
     )
 
-    result = pred.predict(prompt="hello",
-        max_new_tokens=512,
-        mode="no_think",
-        seed=-1)
+    result = pred.predict(prompt="hello", max_new_tokens=512, mode="no_think", seed=-1)
 
     assert isinstance(result, Path)
     assert result.name == "out.txt"
-

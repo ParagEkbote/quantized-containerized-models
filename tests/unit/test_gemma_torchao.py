@@ -1,10 +1,12 @@
 import inspect
+
 import pytest
 import torch
 
 from models.gemma_torchao.predict import (
     Predictor,
 )
+
 
 @pytest.fixture
 def minimal_predictor(monkeypatch, tmp_path):
@@ -35,18 +37,28 @@ def minimal_predictor(monkeypatch, tmp_path):
 
     class DummyProcessor:
         tokenizer = DummyTokenizer()
+
         def __call__(self, text=None, images=None, return_tensors="pt"):
             # return an object with .to(device) that yields tensors in keys used
             class D:
                 def __init__(self, d):
                     self._d = d
+
                 def to(self, device):
                     return self._d
+
                 def __getitem__(self, k):
                     return self._d[k]
+
                 def keys(self):
                     return self._d.keys()
-            return D({"input_ids": torch.tensor([[1, 2, 3]]), "attention_mask": torch.tensor([[1,1,1]])})
+
+            return D(
+                {
+                    "input_ids": torch.tensor([[1, 2, 3]]),
+                    "attention_mask": torch.tensor([[1, 1, 1]]),
+                }
+            )
 
         def batch_decode(self, outputs, skip_special_tokens=True):
             return ["batch decoded"]
@@ -54,8 +66,10 @@ def minimal_predictor(monkeypatch, tmp_path):
     # Minimal model with generate() and parameters()
     class DummyModel:
         device = torch.device("cpu")
+
         def parameters(self):
             yield torch.zeros(1)
+
         def generate(self, **kwargs):
             # return tensor shaped like (batch, seq_len)
             return torch.tensor([[1, 2, 3, 4, 5]])
@@ -72,6 +86,7 @@ def minimal_predictor(monkeypatch, tmp_path):
     # patch external quantize_ call location - safer to patch the function in module if used:
     try:
         import models.gemma.predict as gemma_mod
+
         monkeypatch.setattr(gemma_mod, "quantize_", lambda *a, **k: None)
     except Exception:
         # if module path differs, tests still proceed (user will adjust import)
@@ -81,7 +96,8 @@ def minimal_predictor(monkeypatch, tmp_path):
     try:
         monkeypatch.setattr(
             "models.gemma_torchao.predict.save_output_to_file",
-            lambda text, output_folder=tmp_path, seed=None, index=None, filename=None: tmp_path / "out.txt",
+            lambda text, output_folder=tmp_path, seed=None, index=None, filename=None: tmp_path
+            / "out.txt",
         )
     except Exception:
         # best effort — if path differs, user should update import path above
@@ -149,31 +165,43 @@ def test_input_constraints_match_schema():
     def get_constraints(field_info):
         constraints = {}
         for item in field_info.metadata:
-            if hasattr(item, 'ge'):
-                constraints['ge'] = item.ge
-            if hasattr(item, 'le'):
-                constraints['le'] = item.le
+            if hasattr(item, "ge"):
+                constraints["ge"] = item.ge
+            if hasattr(item, "le"):
+                constraints["le"] = item.le
         return constraints
 
     # max_new_tokens: integer 1..2500
     max_tok_constraints = get_constraints(max_new_tokens_meta)
-    assert max_tok_constraints.get('ge') == 1, f"Expected max_new_tokens ge=1, got {max_tok_constraints}"
-    assert max_tok_constraints.get('le') == 2500, f"Expected max_new_tokens le=2500, got {max_tok_constraints}"
+    assert max_tok_constraints.get("ge") == 1, (
+        f"Expected max_new_tokens ge=1, got {max_tok_constraints}"
+    )
+    assert max_tok_constraints.get("le") == 2500, (
+        f"Expected max_new_tokens le=2500, got {max_tok_constraints}"
+    )
 
     # temperature: 0..2
     temp_constraints = get_constraints(temperature_meta)
-    assert temp_constraints.get('ge') == 0.0, f"Expected temperature ge=0.0, got {temp_constraints}"
-    assert temp_constraints.get('le') == 2.0, f"Expected temperature le=2.0, got {temp_constraints}"
+    assert temp_constraints.get("ge") == 0.0, (
+        f"Expected temperature ge=0.0, got {temp_constraints}"
+    )
+    assert temp_constraints.get("le") == 2.0, (
+        f"Expected temperature le=2.0, got {temp_constraints}"
+    )
 
     # top_p: 0..1
     top_p_constraints = get_constraints(top_p_meta)
-    assert top_p_constraints.get('ge') == 0.0, f"Expected top_p ge=0.0, got {top_p_constraints}"
-    assert top_p_constraints.get('le') == 1.0, f"Expected top_p le=1.0, got {top_p_constraints}"
+    assert top_p_constraints.get("ge") == 0.0, f"Expected top_p ge=0.0, got {top_p_constraints}"
+    assert top_p_constraints.get("le") == 1.0, f"Expected top_p le=1.0, got {top_p_constraints}"
 
     # sparsity_ratio: 0..0.8
     sparsity_constraints = get_constraints(sparsity_ratio_meta)
-    assert sparsity_constraints.get('ge') == 0.0, f"Expected sparsity_ratio ge=0.0, got {sparsity_constraints}"
-    assert sparsity_constraints.get('le') == 0.8, f"Expected sparsity_ratio le=0.8, got {sparsity_constraints}"
+    assert sparsity_constraints.get("ge") == 0.0, (
+        f"Expected sparsity_ratio ge=0.0, got {sparsity_constraints}"
+    )
+    assert sparsity_constraints.get("le") == 0.8, (
+        f"Expected sparsity_ratio le=0.8, got {sparsity_constraints}"
+    )
 
     # Verify FieldInfo objects exist (not checking descriptions as they may be optional)
     assert max_new_tokens_meta is not None
@@ -220,7 +248,8 @@ def test_predict_returns_string_and_writes(minimal_predictor, tmp_path, monkeypa
     # ensure saved file path deterministic
     monkeypatch.setattr(
         "models.gemma_torchao.predict.save_output_to_file",
-        lambda text, output_folder=tmp_path, seed=None, index=None, filename=None: tmp_path / "out.txt",
+        lambda text, output_folder=tmp_path, seed=None, index=None, filename=None: tmp_path
+        / "out.txt",
     )
 
     # Explicitly pass all parameters to avoid FieldInfo objects
@@ -234,13 +263,15 @@ def test_predict_returns_string_and_writes(minimal_predictor, tmp_path, monkeypa
         use_quantization="true",
         use_sparsity="false",
         sparsity_type="magnitude",
-        sparsity_ratio=0.3
+        sparsity_ratio=0.3,
     )
-    
+
     assert isinstance(out, str)
     assert len(out) > 0
 
     # verify that the save utility was invoked by checking file exists
     # (our monkeypatched function returns a path; if original implementation was used it would create file)
     saved = tmp_path / "out.txt"
-    assert saved.exists() or True  # existence can't be guaranteed if original function not used; keep soft check
+    assert (
+        saved.exists() or True
+    )  # existence can't be guaranteed if original function not used; keep soft check

@@ -94,7 +94,6 @@ class Predictor(BasePredictor):
         prompt: str = Input(description="The text prompt to generate the image from."),
         trigger_word: str = Input(description="Style keyword that triggers a specific LoRA."),
     ) -> Path:
-
         # Switch adapters based on trigger word
         if trigger_word in self.lora2_triggers and self.current_adapter != "flux-ghibsky":
             self.pipe.set_adapters(["flux-ghibsky"], adapter_weights=[0.8])

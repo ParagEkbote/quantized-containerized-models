@@ -37,12 +37,12 @@ As we can see the MLP and QKV projections consume the most amount of FLOPs per t
 
 ### Filter map
 - The filter map (`gemma_filter_fn`) is a function / mapping that:
-  
+
 - **Whitelists** layers safe to prune (e.g., `self_attn.q_proj`, `mlp.up_proj`, etc.).
 - **Blacklists** fragile components (embeddings, `lm_head`, LayerNorm, output projection).
 - **Why it’s vital:** It encodes the pruning policy — where to take risk and where not to. The filter map dramatically improves safety by limiting pruning to compute-dominant layers (Q/K/V, MLP) and avoiding layers that break model semantics.
 
 ### Selective `torch.compile`
 - `torch.compile` is applied only to stable, compute-heavy submodules (e.g., embedding or LM head compilation is avoided unless safe).
-- 
+-
 - **Why selective?** Compiling an entire large model consumes time and produces artifacts that are not portable across PyTorch versions / devices. Selective compilation reduces overhead while still getting kernel fusion and memory-planning benefits where it matters most.

@@ -33,7 +33,7 @@ login: ## Login to Replicate using Cog
 # ----------------------------------------
 .PHONY: lint
 lint: ## Run ruff linting and pytest collection checks
-	ruff check .
+	pre-commit run --all-files
 	pytest --collect-only
 
 

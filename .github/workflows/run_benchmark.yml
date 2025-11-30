@@ -25,7 +25,7 @@ jobs:
         run: |
           BENCH_DIR="/workspaces/quantized-containerized-models/benchmark"
           echo "Running benchmarks in: $BENCH_DIR"
-          
+
           find "$BENCH_DIR" -type f -name "benchmark.py" | while read script; do
             echo "=============================================="
             echo "Executing: $script"

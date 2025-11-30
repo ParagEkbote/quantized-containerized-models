@@ -1,6 +1,7 @@
+import logging
 import os
 import time
-import logging
+
 import pytest
 import replicate
 
@@ -10,10 +11,7 @@ import replicate
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 DEPLOYMENT_ID = (
     "paragekbote/phi-4-reasoning-plus-unsloth:"
@@ -38,7 +36,6 @@ def test_phi4_two_sampling_modes():
     - Call 1: stable (low temperature, high top_p)
     - Call 2: creative (high temperature, low top_p)
     """
-
 
     # Deterministic sampling
     call1 = {

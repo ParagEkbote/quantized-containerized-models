@@ -1,11 +1,14 @@
 import inspect
-import pytest
 from pathlib import Path
-from pydantic.fields import FieldInfo,  PydanticUndefined
+
+import pytest
+from cog import Input
+from pydantic.fields import FieldInfo, PydanticUndefined
+
 from models.flux_fast_lora_hotswap_img2img.predict import (
     Predictor,
 )
-from cog import Input
+
 
 def extract_constraints(field: FieldInfo):
     ge = None
@@ -55,6 +58,7 @@ def test_numeric_constraints_strength_guidance_steps():
     assert ge == 1, "num_inference_steps.ge must be 1"
     assert le is None, "num_inference_steps.le must be None"
     assert steps_field.default == 28
+
 
 # -----------------------------------------------------------------------------
 # Contract 1 — Function signature must remain stable
@@ -117,33 +121,33 @@ def test_input_constraints_intact():
     params = sig.parameters
 
     # Get FieldInfo objects from parameters
-    strength_meta: Input = params['strength'].default
-    guidance_meta: Input = params['guidance_scale'].default
-    steps_meta: Input = params['num_inference_steps'].default
-    seed_meta: Input = params['seed'].default
+    strength_meta: Input = params["strength"].default
+    guidance_meta: Input = params["guidance_scale"].default
+    steps_meta: Input = params["num_inference_steps"].default
+    seed_meta: Input = params["seed"].default
 
     # Helper to extract constraints from metadata
     def get_constraints(field_info):
         constraints = {}
         for item in field_info.metadata:
-            if hasattr(item, 'ge'):
-                constraints['ge'] = item.ge
-            if hasattr(item, 'le'):
-                constraints['le'] = item.le
+            if hasattr(item, "ge"):
+                constraints["ge"] = item.ge
+            if hasattr(item, "le"):
+                constraints["le"] = item.le
         return constraints
 
     # strength: 0..1
     strength_constraints = get_constraints(strength_meta)
-    assert strength_constraints.get('ge') == 0
-    assert strength_constraints.get('le') == 1
+    assert strength_constraints.get("ge") == 0
+    assert strength_constraints.get("le") == 1
 
     # guidance_scale: ge=0
     guidance_constraints = get_constraints(guidance_meta)
-    assert guidance_constraints.get('ge') == 0
+    assert guidance_constraints.get("ge") == 0
 
     # num_inference_steps: ge=1
     steps_constraints = get_constraints(steps_meta)
-    assert steps_constraints.get('ge') == 1
+    assert steps_constraints.get("ge") == 1
 
     # Verify FieldInfo objects exist
     assert strength_meta is not None
@@ -164,17 +168,16 @@ def test_invalid_numeric_arguments_raise():
 
     # strength out of bounds
     with pytest.raises(Exception):
-        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png",
-                     strength=-0.1)
+        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png", strength=-0.1)
 
     with pytest.raises(Exception):
-        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png",
-                     strength=2.0)
+        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png", strength=2.0)
 
     # num_inference_steps invalid
     with pytest.raises(Exception):
-        pred.predict(prompt="hello", trigger_word="Cinematic", init_image="x.png",
-                     num_inference_steps=0)
+        pred.predict(
+            prompt="hello", trigger_word="Cinematic", init_image="x.png", num_inference_steps=0
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -194,6 +197,7 @@ class DummyPipeline:
 
 class ImagePlaceholder:
     """Fake PIL Image-like object with save()."""
+
     def save(self, path):
         with open(path, "wb") as f:
             f.write(b"fake-image")
@@ -207,26 +211,27 @@ def test_predict_returns_path(tmp_path, monkeypatch):
     pred = Predictor()
 
     # Initialize required attributes
-    pred.lora2_triggers = {
-        "Cinematic": "cinematic-adapter",
-        "GHIBSKY": "flux-ghibsky"
-    }
+    pred.lora2_triggers = {"Cinematic": "cinematic-adapter", "GHIBSKY": "flux-ghibsky"}
     pred.current_adapter = None
 
     # mock everything heavy:
-    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.load_image",
-                        lambda url: ImagePlaceholder())
+    monkeypatch.setattr(
+        "models.flux_fast_lora_hotswap_img2img.predict.load_image", lambda url: ImagePlaceholder()
+    )
 
     class DummyPipe:
         def set_adapters(self, names, adapter_weights):
             pass
+
         def __call__(self, **kwargs):
             return DummyPipeline()
 
     pred.pipe = DummyPipe()
 
-    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.save_image",
-                        lambda img, output_dir=tmp_path: tmp_path / "result.png")
+    monkeypatch.setattr(
+        "models.flux_fast_lora_hotswap_img2img.predict.save_image",
+        lambda img, output_dir=tmp_path: tmp_path / "result.png",
+    )
 
     # Explicitly pass all parameters
     out = pred.predict(
@@ -236,7 +241,7 @@ def test_predict_returns_path(tmp_path, monkeypatch):
         strength=0.6,
         guidance_scale=7.5,
         num_inference_steps=28,
-        seed=42
+        seed=42,
     )
 
     assert isinstance(out, Path)
@@ -250,17 +255,15 @@ def test_predict_returns_path(tmp_path, monkeypatch):
 @pytest.mark.unit
 def test_trigger_word_switching(monkeypatch):
     pred = Predictor()
-    
+
     # Initialize required attributes
-    pred.lora2_triggers = {
-        "Cinematic": "cinematic-adapter",
-        "GHIBSKY": "flux-ghibsky"
-    }
+    pred.lora2_triggers = {"Cinematic": "cinematic-adapter", "GHIBSKY": "flux-ghibsky"}
     pred.current_adapter = "open-image-preferences"
 
     # Mock image
-    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.load_image",
-                        lambda url: ImagePlaceholder())
+    monkeypatch.setattr(
+        "models.flux_fast_lora_hotswap_img2img.predict.load_image", lambda url: ImagePlaceholder()
+    )
 
     class DummyPipe:
         def __init__(self):
@@ -282,7 +285,7 @@ def test_trigger_word_switching(monkeypatch):
         strength=0.6,
         guidance_scale=7.5,
         num_inference_steps=28,
-        seed=42
+        seed=42,
     )
 
     assert pred.current_adapter == "flux-ghibsky"

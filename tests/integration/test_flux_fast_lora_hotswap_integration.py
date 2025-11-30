@@ -1,8 +1,9 @@
+import logging
 import os
+import time
+
 import pytest
 import replicate
-import time
-import logging
 
 # -----------------------------------------------------
 # Logging configuration
@@ -11,8 +12,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 DEPLOYMENT_ID = (
-    "flux-fast-lora-hotswap:"
-    "a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
+    "flux-fast-lora-hotswap:a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
 )
 
 

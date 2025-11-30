@@ -1,6 +1,7 @@
+import logging
 import os
 import time
-import logging
+
 import pytest
 import replicate
 
@@ -10,10 +11,7 @@ import replicate
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
 # ----------------------------------------------------
 # Deployment ID (string, not tuple)
@@ -31,10 +29,7 @@ BASE_INPUT = {
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(
-    "REPLICATE_API_TOKEN" not in os.environ,
-    reason="REPLICATE_API_TOKEN missing"
-)
+@pytest.mark.skipif("REPLICATE_API_TOKEN" not in os.environ, reason="REPLICATE_API_TOKEN missing")
 def test_replicate_two_modes():
     """
     Integration test:

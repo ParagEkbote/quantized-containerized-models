@@ -29,7 +29,7 @@ def benchmark_flux_lora_text2img(
     """
 
     deployment_id = (
-        "paragekbote/flux-fast-lora-hotswap:"  
+        "paragekbote/flux-fast-lora-hotswap:"
         "a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
     )
 

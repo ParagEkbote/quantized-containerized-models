@@ -1,9 +1,10 @@
 # tests/integration/test_gemma_inference.py
+import logging
 import os
+import time
+
 import pytest
 import replicate
-import time
-import logging
 
 # -----------------------------------------------------
 # Logging configuration
@@ -13,7 +14,8 @@ logger.setLevel(logging.INFO)
 
 DEPLOYMENT_ID = (
     "paragekbote/gemma3-torchao-quant-sparse:"
-    "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2")
+    "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
+)
 
 
 BASE_INPUT = {
@@ -23,10 +25,10 @@ BASE_INPUT = {
     "max_new_tokens": 50,
 }
 
+
 @pytest.mark.integration
 @pytest.mark.skipif(
-    "REPLICATE_API_TOKEN" not in os.environ,
-    reason="Replicate API token not found in environment"
+    "REPLICATE_API_TOKEN" not in os.environ, reason="Replicate API token not found in environment"
 )
 def test_gemma_two_configs():
     """

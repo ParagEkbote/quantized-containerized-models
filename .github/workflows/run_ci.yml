@@ -12,7 +12,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install pre-commit ty  
-      
+          pip install pre-commit ty
+
       - name: Run lint via Makefile
         run: make lint

@@ -8,8 +8,8 @@ theme:
   font:
     text: Ubuntu
 
-  logo: assets/project_hero_img.webp   
-  favicon: assets/project_hero_img.ico   
+  logo: assets/project_hero_img.webp
+  favicon: assets/project_hero_img.ico
 
   features:
     - navigation.footer

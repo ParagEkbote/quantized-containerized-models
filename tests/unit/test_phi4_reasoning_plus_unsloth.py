@@ -1,8 +1,10 @@
-import pytest
 import inspect
-import torch
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
+import torch
+
 
 # Create mock objects
 class DummyTokenizer:
@@ -15,6 +17,7 @@ class DummyTokenizer:
     def decode(self, ids, **k):
         return "MOCK_GENERATED_TEXT"
 
+
 class DummyModel:
     def parameters(self):
         yield torch.zeros(1)
@@ -22,24 +25,28 @@ class DummyModel:
     def generate(self, *a, **k):
         return torch.tensor([[1, 2, 3, 4]])
 
+
 def fake_from_pretrained(*a, **k):
     return DummyModel(), DummyTokenizer()
 
+
 # Patch at module level BEFORE importing Predictor
-with patch('torch.cuda.is_available', return_value=False), \
-     patch('torch.cuda.is_bf16_supported', return_value=False):
-    
+with (
+    patch("torch.cuda.is_available", return_value=False),
+    patch("torch.cuda.is_bf16_supported", return_value=False),
+):
     # Mock unsloth before import
     import sys
     from unittest.mock import MagicMock
-    
+
     mock_unsloth = MagicMock()
     mock_unsloth.FastLanguageModel.from_pretrained = fake_from_pretrained
-    sys.modules['unsloth'] = mock_unsloth
-    
+    sys.modules["unsloth"] = mock_unsloth
+
     # Now import predictor
-    from models.phi4_reasoning_plus_unsloth.predict import Predictor
     from cog import Input
+
+    from models.phi4_reasoning_plus_unsloth.predict import Predictor
 
 
 # ---------------------------------------------------------------------------
@@ -73,39 +80,39 @@ def test_input_constraints_intact():
     sig = inspect.signature(pred.predict)
     params = sig.parameters
 
-    max_new_tokens_meta: Input = params['max_new_tokens'].default
-    temp_meta: Input = params['temperature'].default
-    topp_meta: Input = params['top_p'].default
-    seed_meta: Input = params['seed'].default
+    max_new_tokens_meta: Input = params["max_new_tokens"].default
+    temp_meta: Input = params["temperature"].default
+    topp_meta: Input = params["top_p"].default
+    seed_meta: Input = params["seed"].default
 
     # Extract constraints from metadata
     def get_constraints(field_info):
         constraints = {}
         for item in field_info.metadata:
-            if hasattr(item, 'ge'):
-                constraints['ge'] = item.ge
-            if hasattr(item, 'le'):
-                constraints['le'] = item.le
-            if hasattr(item, 'gt'):
-                constraints['gt'] = item.gt
-            if hasattr(item, 'lt'):
-                constraints['lt'] = item.lt
+            if hasattr(item, "ge"):
+                constraints["ge"] = item.ge
+            if hasattr(item, "le"):
+                constraints["le"] = item.le
+            if hasattr(item, "gt"):
+                constraints["gt"] = item.gt
+            if hasattr(item, "lt"):
+                constraints["lt"] = item.lt
         return constraints
 
     # max_new_tokens
     max_tok_constraints = get_constraints(max_new_tokens_meta)
-    assert max_tok_constraints.get('ge') == 1
-    assert max_tok_constraints.get('le') == 25000
+    assert max_tok_constraints.get("ge") == 1
+    assert max_tok_constraints.get("le") == 25000
 
     # temperature
     temp_constraints = get_constraints(temp_meta)
-    assert temp_constraints.get('ge') == 0.1
-    assert temp_constraints.get('le') == 1
+    assert temp_constraints.get("ge") == 0.1
+    assert temp_constraints.get("le") == 1
 
     # top_p
     topp_constraints = get_constraints(topp_meta)
-    assert topp_constraints.get('ge') == 0.1
-    assert topp_constraints.get('le') == 1
+    assert topp_constraints.get("ge") == 0.1
+    assert topp_constraints.get("le") == 1
 
     # Verify descriptions exist
     assert max_new_tokens_meta.description is not None
@@ -148,11 +155,7 @@ def test_predict_returns_path(tmp_path, monkeypatch):
 
     # Explicitly pass all parameter values
     result = pred.predict(
-        prompt="hello",
-        max_new_tokens=3000,
-        temperature=0.7,
-        top_p=0.95,
-        seed=42
+        prompt="hello", max_new_tokens=3000, temperature=0.7, top_p=0.95, seed=42
     )
 
     assert isinstance(result, Path)

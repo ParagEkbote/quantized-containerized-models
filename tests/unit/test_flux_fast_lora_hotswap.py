@@ -1,11 +1,13 @@
 import inspect
 from pathlib import Path
+
 import pytest
-from pydantic.fields import FieldInfo 
+from pydantic.fields import FieldInfo
 
 from models.flux_fast_lora_hotswap.predict import (
     Predictor,
 )
+
 
 # ---------------------------------------------------------------------------
 # 1. Contract: predict() signature is stable
@@ -47,6 +49,7 @@ def test_required_fields_are_required():
     # Test that calling unbound method without self raises TypeError
     with pytest.raises(TypeError, match="missing 1 required positional argument: 'self'"):
         Predictor.predict()
+
 
 # ---------------------------------------------------------------------------
 # 3. Contract: Input metadata must match schema
@@ -131,6 +134,7 @@ def test_lora_switching_logic():
         def __call__(self, **kw):
             class R:
                 images = [type("Img", (), {"save": lambda self, p: None})()]
+
             return R()
 
     pred.pipe = DummyPipe()
