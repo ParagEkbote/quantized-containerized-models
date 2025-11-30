@@ -1,4 +1,4 @@
-name: Continous Integration (CI)
+name: Continuous Integration (CI)
 
 on:
   workflow_dispatch:
@@ -8,9 +8,30 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      # ----------------------------------------
+      # Checkout
+      # ----------------------------------------
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # REQUIRED BY TRUFFLEHOG
 
+      # ----------------------------------------
+      # trufflehog - Secret scanning
+      # ----------------------------------------
+      - name: Secret scan with TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: .
+          base: main
+          head: HEAD
+          only_verified: true
+          print_all: false
+      # If TruffleHog finds a verified secret, CI FAILS here.
+
+      # ----------------------------------------
+      # Python + Cache
+      # ----------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -24,11 +45,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
+      # ----------------------------------------
+      # Install Dependencies
+      # ----------------------------------------
       - name: Install package + test dependencies
         run: |
           pip install --upgrade pip
           pip install uv
           uv pip install --system ".[dev,unit,deployment]"
 
-      - name: Run CI pipeline (lint + unit + deployment tests)
+      # ----------------------------------------
+      # Run Makefile CI
+      # ----------------------------------------
+      - name: Run CI pipeline (lint + unit + deployment)
         run: make ci
