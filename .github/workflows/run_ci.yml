@@ -1,4 +1,4 @@
-name: Continous Integration(CI)
+name: Continous Integration (CI)
 
 on:
   workflow_dispatch:
