@@ -1,9 +1,6 @@
 name: Continous Integration(CI)
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -31,7 +28,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install uv
-          uv pip install ".[dev,unit,deployment]"
+          uv pip install --system ".[dev,unit,deployment]"
 
       - name: Run CI pipeline (lint + unit + deployment tests)
         run: make ci
