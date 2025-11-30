@@ -23,11 +23,9 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: .
-          base: main
-          head: HEAD
+          scan: filesystem
           only_verified: true
-          print_all: false
-      # If TruffleHog finds a verified secret, CI FAILS here.
+
 
       # ----------------------------------------
       # Python + Cache
@@ -57,5 +55,5 @@ jobs:
       # ----------------------------------------
       # Run Makefile CI
       # ----------------------------------------
-      - name: Run CI pipeline (lint + unit + deployment)
+      - name: Run CI pipeline (lint + unit)
         run: make ci
