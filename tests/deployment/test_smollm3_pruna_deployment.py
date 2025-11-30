@@ -1,10 +1,10 @@
 import os
 import subprocess
 import time
-import pytest
-import requests
 from pathlib import Path
 
+import pytest
+import requests
 
 # ------------------------------------------------------
 # Skip RULES (module-level)
@@ -18,10 +18,7 @@ if not (os.getenv("MODAL_TOKEN_ID") and os.getenv("MODAL_TOKEN_SECRET")):
     )
 
 # Skip if no GPU available
-if not (
-    os.environ.get("NVIDIA_VISIBLE_DEVICES")
-    or os.path.isdir("/proc/driver/nvidia")
-):
+if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/nvidia")):
     pytest.skip(
         "GPU unavailable → skipping deployment tests",
         allow_module_level=True,
@@ -31,6 +28,7 @@ if not (
 # ------------------------------------------------------
 # HELPER: Wait for server to come online
 # ------------------------------------------------------
+
 
 def wait_for_server(url="http://localhost:5000/ping", timeout=60):
     start = time.time()
@@ -49,6 +47,7 @@ def wait_for_server(url="http://localhost:5000/ping", timeout=60):
 # TEST 1 — Container builds successfully
 # ------------------------------------------------------
 
+
 @pytest.mark.deployment
 def test_smollm3_container_builds():
     """Ensure `cog build` succeeds without errors."""
@@ -60,17 +59,13 @@ def test_smollm3_container_builds():
         text=True,
     )
 
-    assert result.returncode == 0, (
-        "Cog build failed.\nSTDOUT:\n"
-        + result.stdout
-        + "\nSTDERR:\n"
-        + result.stderr
-    )
+    assert result.returncode == 0, "Cog build failed.\nSTDOUT:\n" + result.stdout + "\nSTDERR:\n" + result.stderr
 
 
 # ------------------------------------------------------
 # TEST 2 — Server boots
 # ------------------------------------------------------
+
 
 @pytest.mark.deployment
 def test_smollm3_server_boots():
@@ -94,6 +89,7 @@ def test_smollm3_server_boots():
 # ------------------------------------------------------
 # TEST 3 — Missing required fields produce 422
 # ------------------------------------------------------
+
 
 @pytest.mark.deployment
 def test_smollm3_missing_fields():
@@ -122,6 +118,7 @@ def test_smollm3_missing_fields():
 # ------------------------------------------------------
 # TEST 4 — Full inference
 # ------------------------------------------------------
+
 
 @pytest.mark.deployment
 def test_smollm3_full_prediction():

@@ -7,6 +7,10 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
 
+    env:
+      # Make token available to scripts
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -23,13 +27,25 @@ jobs:
 
       - name: Run all benchmark scripts
         run: |
-          BENCH_DIR="/workspaces/quantized-containerized-models/benchmark"
+          BENCH_DIR="./benchmark"
+          RESULTS_DIR="./benchmark/results"
+
+          mkdir -p "$RESULTS_DIR"
+
           echo "Running benchmarks in: $BENCH_DIR"
 
+          # Run each benchmark script and ensure results get saved
           find "$BENCH_DIR" -type f -name "benchmark.py" | while read script; do
             echo "=============================================="
             echo "Executing: $script"
             echo "=============================================="
+
+            # Ensure each script can detect output directory
+            RESULTS_ENV="BENCHMARK_OUTPUT_DIR=$RESULTS_DIR"
+
+            # Run the benchmark with env vars applied
+            REPLICATE_API_TOKEN="$REPLICATE_API_TOKEN" \
+            BENCHMARK_OUTPUT_DIR="$RESULTS_DIR" \
             python "$script"
           done
 
@@ -37,6 +53,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
-          path: |
-            /quantized-containerized-models/benchmark
+          path: benchmark/results
           if-no-files-found: warn

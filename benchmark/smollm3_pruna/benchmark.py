@@ -1,42 +1,47 @@
-import replicate
+import os
 import time
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 
-# Configure logging
+import replicate
+
+
+# =============================================================
+# Output directory (for GH Actions artifacts)
+# =============================================================
+OUTPUT_DIR = Path(os.getenv("BENCHMARK_OUTPUT_DIR", "benchmark_results_smollm3"))
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+LOG_FILE = OUTPUT_DIR / "benchmark_smollm3.log"
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('benchmark.log'),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()],
 )
-
 logger = logging.getLogger(__name__)
 
 
-# -------------------------
+# =============================================================
 # Utility
-# -------------------------
-def calculate_efficiency_rating(tokens_per_sec):
-    """Calculate efficiency rating based on throughput."""
+# =============================================================
+def calculate_efficiency_rating(tokens_per_sec: float) -> str:
     if tokens_per_sec >= 50:
         return "Excellent"
-    elif tokens_per_sec >= 20:
+    if tokens_per_sec >= 20:
         return "Very Good"
-    elif tokens_per_sec >= 10:
+    if tokens_per_sec >= 10:
         return "Good"
-    elif tokens_per_sec >= 5:
+    if tokens_per_sec >= 5:
         return "Fair"
-    else:
-        return "Poor"
+    return "Poor"
 
 
-# -------------------------
-# Benchmark Function
-# -------------------------
+# =============================================================
+# Benchmark SmolLM3
+# =============================================================
 def benchmark_smollm3(
     num_runs=3,
     prompt="What are the applications of ML in healthcare?",
@@ -45,7 +50,7 @@ def benchmark_smollm3(
     max_new_tokens=1024
 ):
     """
-    Benchmark SmolLM3-3B-Smashed with the full schema.
+    Benchmark SmolLM3-3B-Smashed using Replicate streaming output.
     """
 
     deployment_id = (
@@ -53,7 +58,8 @@ def benchmark_smollm3(
         "232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
     )
 
-    # Full input schema
+    client = replicate.Client(api_token=os.environ["REPLICATE_API_TOKEN"])
+
     input_params = {
         "prompt": prompt,
         "mode": mode,
@@ -61,98 +67,100 @@ def benchmark_smollm3(
         "max_new_tokens": max_new_tokens,
     }
 
+    # Header logging
     logger.info("=" * 80)
-    logger.info("SmolLM3-3B-Smashed Benchmark")
+    logger.info("SMOLLM3-3B-SMASHED BENCHMARK")
     logger.info("=" * 80)
     logger.info(f"Deployment: {deployment_id}")
     logger.info(f"Runs: {num_runs}")
-    logger.info(f"Input Schema: {json.dumps(input_params, indent=2)}")
+    logger.info("Input Schema:")
+    logger.info(json.dumps(input_params, indent=2))
     logger.info("=" * 80)
 
     results = {
         "deployment_id": deployment_id,
-        "deployment_name": "SmolLM3-3B-Smashed",
+        "deployment_name": "smollm3-3b-smashed",
         "timestamp": datetime.now().isoformat(),
         "input_params": input_params,
-        "runs": []
+        "runs": [],
     }
 
     run_times = []
     token_counts = []
 
-    # -------------------------------------------------------
-    # Run Benchmark
-    # -------------------------------------------------------
+    # =============================================================
+    # Run benchmark
+    # =============================================================
     for run_num in range(1, num_runs + 1):
         logger.info(f"--- Run {run_num}/{num_runs} ---")
 
         try:
-            start_time = time.time()
+            start = time.time()
 
-            # Replicate output is usually a list or generator of text chunks
-            output = replicate.run(deployment_id, input=input_params)
+            # Replicate outputs streamed text chunks
+            output_chunks = client.run(deployment_id, input=input_params)
 
-            # Concatenate streamed chunks
-            if isinstance(output, list):
-                output_text = "".join(output)
-            else:
-                output_text = ""
-                for chunk in output:
-                    output_text += chunk
+            output_text = ""
+            for chunk in output_chunks:
+                output_text += str(chunk)
 
-            elapsed_time = time.time() - start_time
+            elapsed = time.time() - start
 
-            # Token approximation (word count)
-            word_count = len(output_text.split())
-            char_count = len(output_text)
+            # Word count ≈ token proxy
+            words = len(output_text.split())
+            chars = len(output_text)
 
-            run_times.append(elapsed_time)
-            token_counts.append(word_count)
+            run_times.append(elapsed)
+            token_counts.append(words)
 
-            results["runs"].append({
-                "run_number": run_num,
-                "elapsed_time": elapsed_time,
-                "output_length_chars": char_count,
-                "output_length_words": word_count,
-                "output_text": output_text,
-                "status": "success"
-            })
+            results["runs"].append(
+                {
+                    "run_number": run_num,
+                    "elapsed_time": elapsed,
+                    "output_length_chars": chars,
+                    "output_length_words": words,
+                    "output_text": output_text,
+                    "status": "success",
+                }
+            )
 
-            logger.info(f"✓ Completed in {elapsed_time:.2f}s")
-            logger.info(f"  Output: {char_count} chars, ~{word_count} words")
-            logger.info(f"  Throughput: {word_count/elapsed_time:.2f} tokens/sec")
+            logger.info(f"✓ Completed in {elapsed:.2f}s")
+            logger.info(f"  Output: {chars} chars, ~{words} words")
+            logger.info(f"  Throughput: {words/elapsed:.2f} tokens/sec")
 
-            with open(f"output_run_{run_num}.txt", "w") as f:
-                f.write(output_text)
+            # Save output text
+            out_path = OUTPUT_DIR / f"smollm3_output_run_{run_num}.txt"
+            out_path.write_text(output_text, encoding="utf-8")
 
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"✗ Run failed: {error_msg}")
+            err = str(e)
+            logger.error(f"✗ Run failed: {err}")
 
-            results["runs"].append({
-                "run_number": run_num,
-                "status": "failed",
-                "error": error_msg
-            })
+            results["runs"].append(
+                {
+                    "run_number": run_num,
+                    "status": "failed",
+                    "error": err,
+                }
+            )
 
-    # -------------------------------------------------------
+    # =============================================================
     # Statistics
-    # -------------------------------------------------------
+    # =============================================================
     if run_times:
         avg_time = sum(run_times) / len(run_times)
         min_time = min(run_times)
         max_time = max(run_times)
 
-        avg_words = sum(token_counts) / len(token_counts) if token_counts else 0
-        avg_tokens_per_sec = avg_words / avg_time if avg_time else 0
+        avg_words = sum(token_counts) / len(token_counts)
+        tps = avg_words / avg_time if avg_time else 0
 
-        # Variability
-        time_std_dev = (sum((t - avg_time) ** 2 for t in run_times) / len(run_times)) ** 0.5
-        cv = (time_std_dev / avg_time * 100) if avg_time else 0
+        std_dev = (sum((t - avg_time) ** 2 for t in run_times) / len(run_times)) ** 0.5
+        cv = (std_dev / avg_time * 100) if avg_time else 0
 
-        # Cold start
         cold_start = run_times[0]
-        warm_avg = (sum(run_times[1:]) / (len(run_times) - 1)) if len(run_times) > 1 else None
+        warm_times = run_times[1:]
+        warm_avg = sum(warm_times) / len(warm_times) if warm_times else None
 
         word_std = (
             (sum((w - avg_words) ** 2 for w in token_counts) / len(token_counts)) ** 0.5
@@ -165,16 +173,16 @@ def benchmark_smollm3(
             "avg_time": avg_time,
             "min_time": min_time,
             "max_time": max_time,
-            "time_std_dev": time_std_dev,
+            "time_std_dev": std_dev,
             "time_variability_cv": cv,
             "avg_words": avg_words,
             "word_std_dev": word_std,
-            "avg_tokens_per_sec": avg_tokens_per_sec,
+            "avg_tokens_per_sec": tps,
             "cold_start_time": cold_start,
             "avg_warm_time": warm_avg,
             "cold_vs_warm_ratio": (cold_start / warm_avg) if warm_avg else None,
+            "efficiency_rating": calculate_efficiency_rating(tps),
             "consistency_score": max(0, 100 - cv),
-            "efficiency_rating": calculate_efficiency_rating(avg_tokens_per_sec)
         }
 
         # Insights
@@ -182,25 +190,24 @@ def benchmark_smollm3(
 
         if warm_avg and cold_start > warm_avg * 1.5:
             insights.append(
-                f"Cold start is significantly slower: {cold_start:.2f}s vs warm {warm_avg:.2f}s"
+                f"Cold start significantly slower: {cold_start:.2f}s vs {warm_avg:.2f}s"
             )
 
-        if cv > 50:
-            insights.append(f"High variance (CV {cv:.1f}%) indicates inconsistent performance")
-        elif cv < 20:
-            insights.append(f"Strong stability (CV {cv:.1f}%)")
+        if cv < 20:
+            insights.append(f"Stable performance (CV {cv:.1f}%)")
+        elif cv > 50:
+            insights.append(f"High variability (CV {cv:.1f}%)")
 
-        if avg_tokens_per_sec < 5:
-            insights.append(f"Low throughput: {avg_tokens_per_sec:.2f} tokens/sec")
-        elif avg_tokens_per_sec > 20:
-            insights.append(f"High throughput: {avg_tokens_per_sec:.2f} tokens/sec")
+        if tps < 5:
+            insights.append(f"Low throughput: {tps:.2f} tokens/sec")
+        elif tps > 20:
+            insights.append(f"High throughput: {tps:.2f} tokens/sec")
 
         if word_std > avg_words * 0.2:
-            insights.append(f"Output lengths vary significantly (std {word_std:.0f})")
+            insights.append("Output lengths vary significantly")
 
         results["insights"] = insights
 
-        # Logging summary
         logger.info("\n" + "=" * 80)
         logger.info("BENCHMARK SUMMARY")
         logger.info("=" * 80)
@@ -209,21 +216,24 @@ def benchmark_smollm3(
         logger.info("\nInsights:")
         for i in insights:
             logger.info(f" • {i}")
+        logger.info("=" * 80)
 
     else:
-        logger.warning("No successful runs. No statistics generated.")
+        logger.warning("All runs failed. No statistics available.")
         results["statistics"] = None
 
-    # Save results
-    with open("benchmark_results.json", "w") as f:
-        json.dump(results, f, indent=2)
+    # Save JSON
+    json_path = OUTPUT_DIR / "smollm3_benchmark_results.json"
+    json_path.write_text(json.dumps(results, indent=2))
 
-    logger.info("\n✓ Results saved to benchmark_results.json")
-    logger.info("✓ Logs saved to benchmark.log\n")
+    logger.info(f"\n✓ Saved results: {json_path}")
+    logger.info(f"✓ Logs: {LOG_FILE}\n")
 
     return results
 
 
-# Run Benchmark
+# =============================================================
+# Execute
+# =============================================================
 if __name__ == "__main__":
     benchmark_smollm3(num_runs=3)

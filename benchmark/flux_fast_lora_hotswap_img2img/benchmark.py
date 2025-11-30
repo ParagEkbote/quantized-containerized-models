@@ -1,18 +1,33 @@
-import replicate
+import os
 import time
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 
-# Logging setup
+import requests
+import replicate
+
+
+# =============================================================
+# Output Directory (GitHub Actions compatible)
+# =============================================================
+OUTPUT_DIR = Path(os.getenv("BENCHMARK_OUTPUT_DIR", "benchmark_results_flux"))
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+LOG_FILE = OUTPUT_DIR / "benchmark_flux.log"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("benchmark_flux.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
 
+# =============================================================
+# Benchmark Function
+# =============================================================
 def benchmark_flux_fast_lora(
     num_runs=3,
     prompt="A magical illustration of a dragon flying above the clouds.",
@@ -32,6 +47,8 @@ def benchmark_flux_fast_lora(
         "e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
     )
 
+    client = replicate.Client(api_token=os.environ["REPLICATE_API_TOKEN"])
+
     # Model schema input
     input_params = {
         "prompt": prompt,
@@ -43,11 +60,11 @@ def benchmark_flux_fast_lora(
         "num_inference_steps": num_inference_steps,
     }
 
+    # Logging Header
     logger.info("=" * 90)
     logger.info("FLUX FAST LORA (IMG2IMG) BENCHMARK")
     logger.info("=" * 90)
     logger.info(f"Deployment: {deployment_id}")
-    logger.info("Input Schema:")
     logger.info(json.dumps(input_params, indent=2))
     logger.info(f"Runs: {num_runs}")
     logger.info("=" * 90)
@@ -62,38 +79,43 @@ def benchmark_flux_fast_lora(
 
     run_times = []
 
-    # --------------------------------------------------------
+    # =============================================================
     # RUN BENCHMARK
-    # --------------------------------------------------------
+    # =============================================================
     for run_num in range(1, num_runs + 1):
         logger.info(f"--- Run {run_num}/{num_runs} ---")
 
         try:
             start = time.time()
 
-            output_file = replicate.run(deployment_id, input=input_params)
+            # Replicate returns a URL STRING, not a file object
+            img_url = client.run(deployment_id, input=input_params)
 
-            # Replicate returns file → download
-            img_bytes = output_file.read()
+            if not isinstance(img_url, str):
+                raise ValueError(f"Unexpected response: {img_url}")
 
+            # Download image manually
+            response = requests.get(img_url, timeout=60)
+            response.raise_for_status()
+
+            img_bytes = response.content
             elapsed = time.time() - start
             run_times.append(elapsed)
 
-            # Save image
-            out_path = f"flux_output_run_{run_num}.png"
-            with open(out_path, "wb") as f:
-                f.write(img_bytes)
+            # Save output image
+            out_path = OUTPUT_DIR / f"flux_output_run_{run_num}.png"
+            out_path.write_bytes(img_bytes)
 
             logger.info(f"✓ Completed in {elapsed:.2f}s")
-            logger.info(f"  Image saved → {out_path}")
-            logger.info(f"  URL: {output_file.url()}")
+            logger.info(f"  Saved → {out_path}")
+            logger.info(f"  URL: {img_url}")
 
             results["runs"].append(
                 {
                     "run_number": run_num,
                     "elapsed_time": elapsed,
-                    "file_url": output_file.url(),
-                    "output_file": out_path,
+                    "output_file": str(out_path),
+                    "file_url": img_url,
                     "status": "success",
                 }
             )
@@ -101,20 +123,18 @@ def benchmark_flux_fast_lora(
         except Exception as e:
             err = str(e)
             logger.error(f"✗ Run failed: {err}")
-
             results["runs"].append(
                 {"run_number": run_num, "status": "failed", "error": err}
             )
 
-    # --------------------------------------------------------
+    # =============================================================
     # STATISTICS
-    # --------------------------------------------------------
+    # =============================================================
     if run_times:
         avg_time = sum(run_times) / len(run_times)
         min_time = min(run_times)
         max_time = max(run_times)
 
-        # Variability
         std_dev = (sum((t - avg_time) ** 2 for t in run_times) / len(run_times)) ** 0.5
         cv = (std_dev / avg_time * 100) if avg_time > 0 else 0
 
@@ -137,29 +157,28 @@ def benchmark_flux_fast_lora(
 
         insights = []
 
-        # Cold start effect
+        # Cold start
         if warm_avg and cold_start > warm_avg * 1.5:
             insights.append(
-                f"Cold start is significantly slower: {cold_start:.2f}s vs warm {warm_avg:.2f}s"
+                f"Cold start significantly slower: {cold_start:.2f}s vs warm {warm_avg:.2f}s"
             )
 
         # Stability
         if cv < 20:
-            insights.append(f"Very stable latency (CV {cv:.1f}%)")
+            insights.append(f"Stable performance (CV {cv:.1f}%)")
         elif cv > 50:
-            insights.append(f"High latency variability (CV {cv:.1f}%)")
+            insights.append(f"High variability (CV {cv:.1f}%)")
 
-        # Absolute performance
+        # Absolute speed
         if avg_time < 4:
-            insights.append("Extremely fast LoRA image generation.")
+            insights.append("Extremely fast LoRA generation.")
         elif avg_time < 8:
             insights.append("Good speed for img2img with LoRA.")
         else:
-            insights.append("Slow generation — possible overload or cold backend.")
+            insights.append("Slow inference — backend cold or overloaded.")
 
         results["insights"] = insights
 
-        # Summary Log
         logger.info("\n" + "=" * 90)
         logger.info("BENCHMARK SUMMARY")
         logger.info("=" * 90)
@@ -171,16 +190,18 @@ def benchmark_flux_fast_lora(
             logger.info(f" • {i}")
         logger.info("=" * 90)
 
-    # Save JSON
-    with open("flux_benchmark_results.json", "w") as f:
-        json.dump(results, f, indent=2)
+    # Save final JSON
+    json_path = OUTPUT_DIR / "flux_benchmark_results.json"
+    json_path.write_text(json.dumps(results, indent=2))
 
-    logger.info("\n✓ Saved: flux_benchmark_results.json")
-    logger.info("✓ Logs: benchmark_flux.log\n")
+    logger.info(f"\n✓ Saved: {json_path}")
+    logger.info(f"✓ Logs: {LOG_FILE}\n")
 
     return results
 
 
+# =============================================================
 # Run when executed directly
+# =============================================================
 if __name__ == "__main__":
     benchmark_flux_fast_lora(num_runs=3)
