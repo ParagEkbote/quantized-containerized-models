@@ -90,7 +90,7 @@ tests = [
 ]
 
 deployment = [
-    "tests"
+    "quantized-containerized-models[tests]"
 ]
 
 integration = ["tests"]
