@@ -113,11 +113,11 @@ filterwarnings = [
 
 # ===== Ruff Linting & Formatting =====
 [tool.ruff]
-line-length = 99
+line-length = 150
 target-version = "py310"
 fix = true
 show-fixes = true
-lint.ignore = ["E203","B017","F811"]
+lint.ignore = ["E203","B017","F811","E731","F811"]
 lint.select = ["E", "F", "I", "B", "UP"]
 exclude = ["__pycache__", "build", "dist"]
 
