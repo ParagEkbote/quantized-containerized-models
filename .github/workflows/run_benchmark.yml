@@ -32,21 +32,21 @@ jobs:
 
           mkdir -p "$RESULTS_DIR"
 
-          echo "Running benchmarks in: $BENCH_DIR"
+          echo "Running benchmarks as Python modules"
 
-          # Run each benchmark script and ensure results get saved
-          find "$BENCH_DIR" -type f -name "benchmark.py" | while read script; do
+          mapfile -t MODULES < <(
+            find "$BENCH_DIR" -type f -name "benchmark.py" |
+            sed -e 's#/#.#g' -e 's#.py$##'
+          )
+
+          for module in "${MODULES[@]}"; do
             echo "=============================================="
-            echo "Executing: $script"
+            echo "Executing module: $module"
             echo "=============================================="
 
-            # Ensure each script can detect output directory
-            RESULTS_ENV="BENCHMARK_OUTPUT_DIR=$RESULTS_DIR"
-
-            # Run the benchmark with env vars applied
             REPLICATE_API_TOKEN="$REPLICATE_API_TOKEN" \
             BENCHMARK_OUTPUT_DIR="$RESULTS_DIR" \
-            python "$script"
+            python -m "$module"
           done
 
       - name: Upload all benchmark results
