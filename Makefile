@@ -110,14 +110,14 @@ deployment: ## Run deployment tests
 
 
 # ----------------------------------------
-# CI → Unit tests only
+# CI → Unit+Deployment+Linting tests only
 # ----------------------------------------
 .PHONY: ci
-ci: lint unit ## Run linting + unit tests only
+ci: lint unit deployment 
 
 
 # ----------------------------------------
-# CD → All tests
+# CD → All tests+Linting
 # ----------------------------------------
 .PHONY: cd
 cd: lint unit integration deployment ## Run all tests for CD pipeline

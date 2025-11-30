@@ -9,8 +9,9 @@ requires-python = ">=3.10"
 
 # ===== Core Dependencies =====
 dependencies = [
-    "torch>=2.1.0",
-    "cog>=0.9.3"
+    "torch==2.8.0",
+    "cog>=0.9.3",
+    "replicate==1.0.7"
 ]
 
 # ===== Optional Dependency Groups =====
@@ -18,7 +19,7 @@ dependencies = [
 smollm3 = [
     "colorama",
     "IPython",
-    "pruna"
+    "pruna==0.2.8"
 ]
 
 unsloth = [
@@ -72,12 +73,27 @@ gemma-torchao = [
     "torchao"
 ]
 
-dev-tooling = [
+dev = [
     "pre-commit",
-    "ty",
-    "ruff",
-    "pytest"
+    "ty==0.0.1a20",
+    "ruff>0.14.0"
 ]
+
+unit = [
+    "quantized-containerized-models[smollm3,flux-fast-lora,flux-fast-lora-img2img,gemma-torchao,tests]"
+]
+
+tests = [
+    "pytest>8.0",
+    "replicate==1.0.7",
+    "cog>=0.9.3"
+]
+
+deployment = [
+    "tests"
+]
+
+integration = ["tests"]
 
 # ===== Pytest =====
 [tool.pytest.ini_options]

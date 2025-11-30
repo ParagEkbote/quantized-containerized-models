@@ -16,7 +16,7 @@ build:
     # Install uv (precompiled binary, faster than pip)
     - command: curl -LsSf https://astral.sh/uv/install.sh | sh
     # Install Python packages with uv into system Python
-    - command: uv pip install --system pruna
+    - command: uv pip install --system pruna==0.2.8
     - command: uv pip install --system colorama
     - command: uv pip install --system IPython
     # Export compiler path
