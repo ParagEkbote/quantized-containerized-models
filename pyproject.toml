@@ -75,6 +75,7 @@ gemma-torchao = [
 dev-tooling = [
     "pre-commit",
     "ty",
+    "ruff",
     "pytest"
 ]
 
@@ -84,6 +85,11 @@ minversion = "8.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "unit: fast contract tests",
+    "integration: tests requiring Replicate API",
+    "deployment: tests verifying container build",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",
@@ -95,8 +101,8 @@ line-length = 99
 target-version = "py310"
 fix = true
 show-fixes = true
+ignore = ["E203"]
 select = ["E", "F", "I", "B", "UP"]
-ignore = ["E203", "W503"]
 exclude = ["__pycache__", "build", "dist"]
 
 [tool.ruff.format]

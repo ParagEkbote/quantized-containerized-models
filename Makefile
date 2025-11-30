@@ -1,7 +1,3 @@
-# ==============================================================
-# Minimal Cog Makefile: Build, Push, Deploy, Clean, Delete, Lint,Test,Doc Deploy(Todo)
-# ==============================================================
-
 MODEL_DIR ?= $(CURDIR)
 MODEL_DIR := $(abspath $(MODEL_DIR))
 MODEL_NAME := $(notdir $(MODEL_DIR))
@@ -15,83 +11,116 @@ REGISTRY := r8.im
 IMAGE_TAG := $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
 
 
-# --------------------------------------------------------------
-# Skinny help
-# --------------------------------------------------------------
+# ----------------------------------------
+# Help
+# ----------------------------------------
 .PHONY: help
 help: ## Show available commands
-	@echo "Cog Makefile Commands:"
-	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | sed 's/:.*##/:  /'
 
 
-# --------------------------------------------------------------
-# Build image
-# --------------------------------------------------------------
+# ----------------------------------------
+# Login
+# ----------------------------------------
+.PHONY: login
+login: ## Login to Replicate using Cog
+	@if [ ! -x "$(COG_CMD)" ]; then echo "Cog not found"; exit 1; fi
+	"$(COG_CMD)" login
+
+
+# ----------------------------------------
+# Lint
+# ----------------------------------------
+.PHONY: lint
+lint: ## Run ruff linting and pytest collection checks
+	ruff check .
+	pytest --collect-only
+
+
+# ----------------------------------------
+# Build
+# ----------------------------------------
 .PHONY: build
-build: ## Build Cog image for MODEL_DIR
-	@if [ ! -x "$(COG_CMD)" ]; then echo "Cog not found at $(COG_CMD)"; exit 1; fi
-	@if [ ! -f "$(MODEL_DIR)/cog.yaml" ]; then echo "cog.yaml missing in $(MODEL_DIR)"; exit 1; fi
+build: ## Build Cog image
+	@if [ ! -x "$(COG_CMD)" ]; then echo "Cog not found"; exit 1; fi
+	@if [ ! -f "$(MODEL_DIR)/cog.yaml" ]; then echo "cog.yaml missing"; exit 1; fi
 	cd "$(MODEL_DIR)" && "$(COG_CMD)" build -t "$(MODEL_NAME)"
-	echo "Build complete: $(MODEL_NAME)"
 
 
-# --------------------------------------------------------------
-# Push image
-# --------------------------------------------------------------
+# ----------------------------------------
+# Push
+# ----------------------------------------
 .PHONY: push
-push: ## Push model to Replicate (no auto-login)
+push: ## Push image to Replicate
 	cd "$(MODEL_DIR)" && "$(COG_CMD)" push "$(IMAGE_TAG)"
-	echo "Pushed: $(IMAGE_TAG)"
 
 
-# --------------------------------------------------------------
-# Deploy with auto-login
-# --------------------------------------------------------------
+# ----------------------------------------
+# Deploy
+# ----------------------------------------
 .PHONY: deploy
-deploy: ## Deploy model to Replicate (auto-login, prefers model-local cog)
-	@if [ ! -x "$(COG_CMD)" ]; then echo "Cog not found at $(COG_CMD)"; exit 1; fi
-	@if [ ! -f "$(MODEL_DIR)/cog.yaml" ]; then echo "cog.yaml missing in $(MODEL_DIR)"; exit 1; fi
-	@if ! "$(COG_CMD)" whoami >/dev/null 2>&1; then \
-		echo "Not logged in → running cog login..."; \
-		"$(COG_CMD)" login || exit 1; \
-	fi
+deploy: ## Auto-login and push
+	@if ! "$(COG_CMD)" whoami >/dev/null 2>&1; then "$(COG_CMD)" login; fi
 	cd "$(MODEL_DIR)" && "$(COG_CMD)" push "$(IMAGE_TAG)"
-	echo "Deployed: $(IMAGE_TAG)"
 
 
-# --------------------------------------------------------------
+# ----------------------------------------
 # Remove local Docker images
-# --------------------------------------------------------------
+# ----------------------------------------
 .PHONY: remove-image
-remove-image: ## Remove local Docker images for MODEL_DIR
+remove-image: ## Remove local Docker images
 	@if command -v docker >/dev/null 2>&1; then \
 		docker rmi -f "$(MODEL_NAME)" 2>/dev/null || true; \
 		docker rmi -f "$(IMAGE_TAG)" 2>/dev/null || true; \
-		echo "Local images removed."; \
-	else \
-		echo "Docker not installed; skipping."; \
 	fi
 
 
-# --------------------------------------------------------------
-# Delete model-local Cog + images
-# --------------------------------------------------------------
+# ----------------------------------------
+# Delete local Cog + images
+# ----------------------------------------
 .PHONY: delete-local
-delete-local: ## Remove model-local Cog and Docker artifacts
-	@if [ -f "$(LOCAL_COG)" ]; then rm -f "$(LOCAL_COG)"; echo "Removed model-local Cog."; fi
-	$(MAKE) -s remove-image MODEL_DIR="$(MODEL_DIR)"
-	echo "delete-local complete."
+delete-local: ## Delete .cog and local images
+	@if [ -f "$(LOCAL_COG)" ]; then rm -f "$(LOCAL_COG)"; fi
+	$(MAKE) -s remove-image
 
 
-# --------------------------------------------------------------
-# Clean Python cache
-# --------------------------------------------------------------
+# ----------------------------------------
+# Clean pycache
+# ----------------------------------------
 .PHONY: clean
-clean: ## Remove pycache and *.pyc
-	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	echo "Clean complete."
+clean: ## Clean __pycache__ and pyc files
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+
+
+# ----------------------------------------
+# Testing (unit / integration / deployment)
+# ----------------------------------------
+.PHONY: unit
+unit: ## Run unit tests
+	pytest -m "unit"
+
+.PHONY: integration
+integration: ## Run integration tests
+	pytest -m "integration"
+
+.PHONY: deployment
+deployment: ## Run deployment tests
+	pytest -m "deployment"
+
+
+# ----------------------------------------
+# CI → Unit tests only
+# ----------------------------------------
+.PHONY: ci
+ci: lint unit ## Run linting + unit tests only
+
+
+# ----------------------------------------
+# CD → All tests
+# ----------------------------------------
+.PHONY: cd
+cd: lint unit integration deployment ## Run all tests for CD pipeline
 
 
 .DEFAULT_GOAL := help
