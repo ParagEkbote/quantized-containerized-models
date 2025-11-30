@@ -19,6 +19,7 @@ dependencies = [
 smollm3 = [
     "colorama",
     "IPython",
+    "pyarrow<18",
     "pruna==0.2.8"
 ]
 
