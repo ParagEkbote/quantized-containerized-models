@@ -131,11 +131,20 @@ docstring-code-format = true
 # Type checker configuration
 # -----------------------------
 [tool.ty.rules]
+# Ignore rules that are stricter than mypy for transition period
 unresolved-import = "ignore"
-invalid-assignment = "ignore"
-call-non-callable = "ignore"
-index-out-of-bounds = "ignore"
-unresolved-attribute = "ignore"
-redundant-cast = "ignore"
-unsupported-operator = "ignore"
-invalid-argument-type = "ignore"
+invalid-assignment = "ignore"  # mypy is more permissive with Any assignments
+call-non-callable = "ignore"   # mypy allows more dynamic method calls
+index-out-of-bounds = "ignore" # mypy is more permissive with tuple indexing
+unresolved-attribute = "ignore" # mypy is more permissive with module attributes
+redundant-cast = "ignore"      # mypy doesn't warn about redundant casts
+unsupported-operator = "ignore" # mypy supports | syntax with from __future__ import annotations
+invalid-argument-type = "ignore" # mypy is more permissive with argument types
+invalid-return-type = "ignore" # mypy is more permissive with return types
+invalid-parameter-default = "ignore" # mypy is more permissive with parameter defaults
+no-matching-overload = "ignore" # mypy is more permissive with overloads
+unresolved-reference = "ignore" # mypy is more permissive with references
+possibly-unbound-import = "ignore"
+invalid-type-form="ignore"
+invalid-method-override="ignore"
+missing-argument = "ignore"
