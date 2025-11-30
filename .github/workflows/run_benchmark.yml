@@ -9,7 +9,7 @@ jobs:
 
     env:
       # Make token available to scripts
-      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
 
     steps:
       - name: Checkout repository
