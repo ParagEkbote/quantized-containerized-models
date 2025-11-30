@@ -117,8 +117,8 @@ line-length = 99
 target-version = "py310"
 fix = true
 show-fixes = true
-ignore = ["E203"]
-select = ["E", "F", "I", "B", "UP"]
+lint.ignore = ["E203","B017","F811"]
+lint.select = ["E", "F", "I", "B", "UP"]
 exclude = ["__pycache__", "build", "dist"]
 
 [tool.ruff.format]

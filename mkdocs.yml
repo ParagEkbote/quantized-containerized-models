@@ -72,7 +72,9 @@ markdown_extensions:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+        - name: code
+          class: code
+
 
   # Tabs for code examples
   - pymdownx.tabbed:

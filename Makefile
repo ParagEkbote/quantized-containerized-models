@@ -113,7 +113,7 @@ deployment: ## Run deployment tests
 # CI → Unit+Deployment+Linting tests only
 # ----------------------------------------
 .PHONY: ci
-ci: lint unit deployment 
+ci: lint unit deployment
 
 
 # ----------------------------------------
