@@ -1,45 +1,54 @@
-import json
+import os
 import time
+import json
 import logging
 from datetime import datetime
-from pathlib import Path
 
 from benchmark.utils import safe_replicate_run, normalize_output
 
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler("benchmark_smollm3.log"),
+        logging.StreamHandler(),
+    ],
+)
 logger = logging.getLogger(__name__)
 
 
-def benchmark_smollm3(
-    num_runs=3,
-    prompt="What are the applications of machine learning in healthcare?",
-    mode="no_think",
-    seed=18,
-    max_new_tokens=1024,
-):
-    """
-    Benchmark SmolLM3-3B Smashed deployment.
-    """
+def calculate_efficiency_rating(tps):
+    if tps >= 50:
+        return "Excellent"
+    if tps >= 20:
+        return "Very Good"
+    if tps >= 10:
+        return "Good"
+    if tps >= 5:
+        return "Fair"
+    return "Poor"
 
+
+def benchmark_smollm3(num_runs=3):
     deployment_id = (
         "paragekbote/smollm3-3b-smashed:"
         "232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
     )
 
+    out_dir = os.getenv("BENCHMARK_OUTPUT_DIR", ".")
+    os.makedirs(out_dir, exist_ok=True)
+
     input_params = {
-        "prompt": prompt,
-        "mode": mode,
-        "seed": seed,
-        "max_new_tokens": max_new_tokens,
+        "prompt": "What are the applications of ML in healthcare?",
+        "mode": "no_think",
+        "seed": 18,
+        "max_new_tokens": 1024,
     }
 
-    logger.info("=" * 80)
-    logger.info("SMOLLM3-3B SMASHED BENCHMARK")
-    logger.info("=" * 80)
+    logger.info("Running SmolLM3 Benchmark")
     logger.info(json.dumps(input_params, indent=2))
 
     results = {
         "deployment_id": deployment_id,
-        "deployment_name": "SmolLM3-3B-Smashed",
         "timestamp": datetime.now().isoformat(),
         "input_params": input_params,
         "runs": [],
@@ -48,55 +57,85 @@ def benchmark_smollm3(
     run_times = []
     token_counts = []
 
-    out_dir = Path("benchmark/results")
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    for run in range(1, num_runs + 1):
-        logger.info(f"--- Run {run}/{num_runs} ---")
+    for i in range(1, num_runs + 1):
+        logger.info(f"--- Run {i}/{num_runs} ---")
 
         try:
             start = time.time()
-
-            output = safe_replicate_run(deployment_id, input_params)
-            normalized = normalize_output(output)
+            raw_out = safe_replicate_run(deployment_id, input_params)
+            output = normalize_output(raw_out)
 
             elapsed = time.time() - start
             run_times.append(elapsed)
 
-            if isinstance(normalized, str):
-                text = normalized
-                words = len(text.split())
+            if isinstance(output, bytes):
+                text = output.decode("utf-8", errors="ignore")
             else:
-                text = "<binary output>"
-                words = 0
+                text = output
 
+            words = len(text.split())
             token_counts.append(words)
 
-            # Save output text
-            out_path = out_dir / f"smollm3_run_{run}.txt"
-            out_path.write_text(text, encoding="utf-8")
+            out_path = os.path.join(out_dir, f"smollm3_output_run_{i}.txt")
+            with open(out_path, "w") as f:
+                f.write(text)
 
-            results["runs"].append(
-                {
-                    "run_number": run,
-                    "elapsed_time": elapsed,
-                    "output_words": words,
-                    "output_file": str(out_path),
-                    "status": "success",
-                }
-            )
-
-            logger.info(f"✓ Run {run} completed ({words} words in {elapsed:.2f}s)")
+            results["runs"].append({
+                "run_number": i,
+                "elapsed_time": elapsed,
+                "word_count": words,
+                "status": "success",
+            })
 
         except Exception as e:
-            logger.error(f"✗ Run {run} failed: {e}")
-            results["runs"].append({"run_number": run, "status": "failed", "error": str(e)})
+            err = str(e)
+            logger.error(f"Run failed: {err}")
+            results["runs"].append({"run_number": i, "status": "failed", "error": err})
 
-    # Save JSON
-    (out_dir / "smollm3_benchmark.json").write_text(json.dumps(results, indent=2))
+    if run_times:
+        avg = sum(run_times) / len(run_times)
+        mn = min(run_times)
+        mx = max(run_times)
+        std = (sum((t - avg) ** 2 for t in run_times) / len(run_times)) ** 0.5
+        cv = std / avg * 100 if avg else 0
 
+        avg_words = sum(token_counts) / len(token_counts)
+        tps = avg_words / avg if avg else 0
+
+        cold = run_times[0]
+        warm = run_times[1:]
+        warm_avg = sum(warm) / len(warm) if warm else None
+
+        word_std = (
+            (sum((w - avg_words) ** 2 for w in token_counts) / len(token_counts)) ** 0.5
+            if len(token_counts) > 1 else 0
+        )
+
+        results["statistics"] = {
+            "successful_runs": len(run_times),
+            "failed_runs": num_runs - len(run_times),
+            "avg_time": avg,
+            "min_time": mn,
+            "max_time": mx,
+            "time_std_dev": std,
+            "time_variability_cv": cv,
+            "avg_words": avg_words,
+            "word_std_dev": word_std,
+            "avg_tokens_per_sec": tps,
+            "cold_start_time": cold,
+            "avg_warm_time": warm_avg,
+            "cold_vs_warm_ratio": cold / warm_avg if warm_avg else None,
+            "efficiency_rating": calculate_efficiency_rating(tps),
+            "consistency_score": max(0, 100 - cv),
+        }
+
+    out_json = os.path.join(out_dir, "smollm3_benchmark_results.json")
+    with open(out_json, "w") as f:
+        json.dump(results, f, indent=2)
+
+    logger.info(f"Saved → {out_json}")
     return results
 
 
 if __name__ == "__main__":
-    benchmark_smollm3(num_runs=3)
+    benchmark_smollm3()
