@@ -1,1 +1,4 @@
 name: Deploy Document Site using Github Pages
+
+on:
+  workflow_dispatch:
