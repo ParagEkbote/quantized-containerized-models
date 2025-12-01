@@ -10,6 +10,8 @@ USERNAME ?= paragekbote
 REGISTRY := r8.im
 IMAGE_TAG := $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
 
+MKDOCS = mkdocs
+CONFIG_FILE = /workspaces/ParagEkbote.github.io/mkdocs.yml
 
 # ----------------------------------------
 # Help
@@ -107,13 +109,11 @@ integration: ## Run integration tests
 deployment: ## Run deployment tests
 	pytest -m "deployment"
 
-
 # ----------------------------------------
 # CI → Unit+Linting tests only
 # ----------------------------------------
 .PHONY: ci
 ci: lint unit
-
 
 # ----------------------------------------
 # CD → All tests+Linting
@@ -121,5 +121,19 @@ ci: lint unit
 .PHONY: cd
 cd: lint unit integration deployment ## Run all tests for CD pipeline
 
+# ----------------------------------------
+# Mkdocs Commands
+# ----------------------------------------
+.PHONY: serve docs
+serve docs:
+	$(MKDOCS) serve -f $(CONFIG_FILE)
+
+.PHONY:build docs
+build docs:
+	$(MKDOCS) build -f $(CONFIG_FILE)
+
+.PHONY:clean docs
+clean docs:
+	rm -rf site/
 
 .DEFAULT_GOAL := help
