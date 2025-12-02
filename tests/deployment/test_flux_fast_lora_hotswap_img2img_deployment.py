@@ -6,18 +6,17 @@ from pathlib import Path
 import pytest
 import requests
 
+
 # ------------------------------------------------------
 # Skip RULES (module-level)
 # ------------------------------------------------------
 
-# Skip if Modal credentials missing
 if not (os.getenv("MODAL_TOKEN_ID") and os.getenv("MODAL_TOKEN_SECRET")):
     pytest.skip(
         "Modal credentials missing → skipping deployment tests",
         allow_module_level=True,
     )
 
-# Skip if no GPU available
 if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/nvidia")):
     pytest.skip(
         "GPU unavailable → skipping deployment tests",
@@ -26,9 +25,8 @@ if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/
 
 
 # ------------------------------------------------------
-# HELPER: Wait for server to come online
+# HELPER: wait loop
 # ------------------------------------------------------
-
 
 def wait_for_server(url="http://localhost:5000/ping", timeout=60):
     start = time.time()
@@ -44,71 +42,58 @@ def wait_for_server(url="http://localhost:5000/ping", timeout=60):
 
 
 # ------------------------------------------------------
-# TEST 1 — Container builds successfully
+# TEST 1 — Build
 # ------------------------------------------------------
-
 
 @pytest.mark.deployment
 def test_flux_fast_lora_hotswap_img2img_container_builds():
-    """Ensure `cog build` succeeds without errors."""
-
     result = subprocess.run(
-        ["cog", "build", "-t", "smollm3-test"],
+        ["cog", "build", "-t", "flux-fast-lora-hotswap-img2img-test"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-
-    assert result.returncode == 0, "Cog build failed.\nSTDOUT:\n" + result.stdout + "\nSTDERR:\n" + result.stderr
+    assert result.returncode == 0, \
+        f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
 
 
 # ------------------------------------------------------
-# TEST 2 — Server boots
+# TEST 2 — Serve boots
 # ------------------------------------------------------
-
 
 @pytest.mark.deployment
 def test_flux_fast_lora_hotswap_img2img_server_boots():
-    """Ensure `cog serve` boots and responds to /ping."""
-
     proc = subprocess.Popen(
         ["cog", "serve"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-
     try:
-        ok = wait_for_server()
-        assert ok, "cog serve did not become ready within timeout"
+        assert wait_for_server(), "Server did not become ready"
     finally:
         proc.terminate()
         proc.wait(timeout=10)
 
 
 # ------------------------------------------------------
-# TEST 3 — Missing required fields produce 422
+# TEST 3 — 422 for missing schema fields
 # ------------------------------------------------------
-
 
 @pytest.mark.deployment
 def test_flux_fast_lora_hotswap_img2img_missing_fields():
-    """POST /predictions without prompt must return HTTP 422."""
-
-    # Boot server
     proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     try:
         assert wait_for_server(), "Server did not become ready"
 
-        # Missing prompt → 422
-        response = requests.post(
+        resp = requests.post(
             "http://localhost:5000/predictions",
-            json={},
+            json={},  # no prompt
             timeout=5,
         )
 
-        assert response.status_code == 422, f"Expected 422, got {response.status_code}"
+        assert resp.status_code == 422, f"Expected 422 but got {resp.status_code}"
 
     finally:
         proc.terminate()
@@ -119,16 +104,8 @@ def test_flux_fast_lora_hotswap_img2img_missing_fields():
 # TEST 4 — Full inference
 # ------------------------------------------------------
 
-
 @pytest.mark.deployment
 def test_flux_fast_lora_hotswap_img2img_full_prediction():
-    """
-    Send a real request through the container and ensure:
-    - server responds
-    - output_path is returned
-    - image output is delivered
-    """
-
     proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     try:
@@ -144,20 +121,23 @@ def test_flux_fast_lora_hotswap_img2img_full_prediction():
             "num_inference_steps": 28
         }
 
-        response = requests.post(
+        resp = requests.post(
             "http://localhost:5000/predictions",
             json=payload,
             timeout=60,
         )
 
-        assert response.status_code == 200, f"Prediction failed: {response.text}"
+        assert resp.status_code == 200, f"Prediction failed: {resp.text}"
 
-        data = response.json()
-        assert "output" in data, "Missing output in response"
+        data = resp.json()
 
-        output_path = data["output"]
-        assert isinstance(output_path, str)
-        assert Path(output_path).exists(), f"Output file not found: {output_path}"
+        assert "output" in data, "Missing output field"
+
+        out_path = data["output"]
+        out_file = Path(out_path)
+
+        assert out_file.exists(), f"Output file missing: {out_file}"
+        assert out_file.stat().st_size > 0, "Output image file is empty"
 
     finally:
         proc.terminate()
