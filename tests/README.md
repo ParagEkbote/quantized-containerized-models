@@ -1,6 +1,6 @@
 ## Testing Strategy
 
-![alt text](../docs/assets/testing_hero_img.webp)
+![alt text](../docs/assets/hero_img_testing.webp)
 
 This repository uses a **three-tier test plan** designed specifically for Cog/Replicate model deployments.
 Each layer validates a different part of the deployment lifecycle, from Python logic to full container execution.

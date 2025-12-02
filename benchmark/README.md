@@ -1,6 +1,6 @@
 ## Model Deployment Benchmarking
 
-![Benchmark Hero Image](../docs/assets/hero_img_benchmark.webp)
+![alt text](../docs/assets/hero_img_benchmark.webp)
 
 This benchmarking framework provides a standardized approach to evaluating model deployments on Replicate. It focuses on measuring real-world performance characteristics including latency, throughput, consistency and optimization effectiveness across different model types.
 
