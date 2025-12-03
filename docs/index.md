@@ -9,34 +9,18 @@
 ## 🚀 Quick Navigation
 
 ### Getting Started
-- [Installation Guide](getting-started/installation.md) - Set up your environment
-- [Quick Start](getting-started/quickstart.md) - Run your first quantized model
-- [Core Concepts](getting-started/concepts.md) - Understand quantization and containerization
+- [Core Concepts](docs/concepts.md) - Understand quantization and containerization
+- [Quick Start](docs/quickstart.md) - Run your first model
 
 ### Architecture & Design
-- [System Architecture](architecture/overview.md) - High-level system design
-- [Quantization Pipeline](architecture/quantization.md) - How models are optimized
-- [Containerization Strategy](architecture/containerization.md) - Cog-based deployment approach
+- [System Architecture](docs/architecture.md) - High-level system design
 
 ### Deployments
-- [Deployment Overview](deployments/overview.md) - All available model deployments
-- [Deployment Guide](deployments/deployment.md) - How to deploy your own models
-- [API Reference](deployments/api-reference.md) - Complete endpoint documentation
+- [Deployment Overview](docs/deployment.md) - All available model deployments
+- [API Reference](docs/deployment.md) - Complete endpoint documentation
 
 ### Examples & Tutorials
-- [Usage Examples](examples/basic-usage.md) - Common use cases
-- [Advanced Patterns](examples/advanced.md) - Complex implementations
-- [Integration Guides](examples/integrations.md) - Web apps, APIs, and more
-
-### Performance & Benchmarks
-- [Performance Comparison](benchmarks/comparison.md) - Quantized vs original models
-- [Cost Analysis](benchmarks/cost.md) - Resource and financial savings
-- [Optimization Tips](benchmarks/optimization.md) - Get the best performance
-
-### Development
-- [Contributing Guide](development/contributing.md) - Help improve the project
-- [Development Setup](development/setup.md) - Local development environment
-- [Testing](development/testing.md) - Run tests and benchmarks
+- [Usage Examples](docs/examples.md) - Common use cases
 
 ---
 
@@ -52,7 +36,7 @@ We provide **5 production-ready deployments** showcasing different model types a
 | [Sentiment Analysis](deployments/sentiment-analysis.md) | BERT-based | INT8 | Text classification | ✅ Live |
 | [Image Generation](deployments/image-generation.md) | Diffusion Model | Mixed (INT8/FP16) | AI art, creative tools | ✅ Live |
 
-[View all deployment details →](deployments/overview.md)
+[View all deployment details →](docs/deployment.md)
 
 ---
 
@@ -66,8 +50,7 @@ We provide **5 production-ready deployments** showcasing different model types a
 
 ### Reproducible Containerization
 - **Cog-based containers** for consistent environments
-- **Version-locked dependencies** for reproducibility
-- **GPU optimization** with CUDA support
+- **GPU deployment** with CUDA support
 - **One-command deployment** to Replicate
 
 ---
@@ -81,31 +64,11 @@ Deploying AI models in production is challenging:
 - Inconsistent environments cause deployment failures
 - High costs limit accessibility and scale
 
-### Our Solution
+### Solution
 Combine quantization and containerization for:
 - **Hardware efficiency** - Run larger models on smaller GPUs
 - **Speed** - Faster inference without sacrificing quality
 - **Reproducibility** - Identical behavior across environments
-- **Scalability** - Easy horizontal scaling with containers
-
----
-
-## 🛠️ Technology Stack
-
-### Quantization
-- **PyTorch Quantization** - Post-training quantization (PTQ)
-- **ONNX Runtime** - Optimized inference
-- **TensorRT** - NVIDIA GPU acceleration
-
-### Containerization
-- **Cog** - ML-specific container toolkit
-- **Docker** - Container runtime
-- **Python 3.11** - Core language
-
-### Deployment
-- **Replicate** - Scalable model hosting
-- **REST API** - Standard HTTP interface
-- **Async Processing** - Queue-based predictions
 
 ---
 
@@ -114,13 +77,10 @@ Combine quantization and containerization for:
 This documentation is organized into focused sections:
 
 **For New Users:**
-Start with [Quick Start](getting-started/quickstart.md) to run your first model in under 5 minutes.
+Start with [Quick Start](docs/quickstart.md) to run your first model in under 5 minutes.
 
-**For Developers:**
-Read the [Architecture Overview](architecture/overview.md) to understand the system design, then explore [Deployment Guide](deployments/deployment.md) to deploy your own models.
-
-**For Integration:**
-Check [API Reference](deployments/api-reference.md) for endpoint specifications and [Examples](examples/basic-usage.md) for code samples in Python, JavaScript, and cURL.
+**For Developers and Builders:**
+Read the [Architecture Overview](docs/architecture.md) to understand the system design and application. Check [API Reference](docs/deployment.md) for endpoint specifications and [Examples](docs/examples.md) for code examples.
 
 ---
 
@@ -130,4 +90,4 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](../LIC
 
 ---
 
-**Ready to get started?** → [Quick Start Guide](getting-started/quickstart.md)
+**Ready to get started?** → [Quick Start Guide](docs/quickstart.md)
