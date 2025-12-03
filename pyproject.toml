@@ -96,6 +96,8 @@ deployment = [
 
 integration = ["tests"]
 
+docs=["mkdocs-material==9.6.0"]
+
 # ===== Pytest =====
 [tool.pytest.ini_options]
 minversion = "8.0"

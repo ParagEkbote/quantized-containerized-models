@@ -1,6 +1,7 @@
 site_name: "Quantized-Containerized-Models"
 site_description: "Documentation for quantized and containerized AI model deployments."
 
+docs_dir: "docs"
 # site_url: "https://paragekbote.github.io/quantized-containerized-models/"
 
 theme:
@@ -42,7 +43,6 @@ theme:
       primary: black
       accent: amber
 
-#docs_dir: "/workspaces/quantized-containerized-models/docs"
 
 extra:
   social:
