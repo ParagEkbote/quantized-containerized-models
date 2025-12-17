@@ -16,7 +16,7 @@ def save_text(output_folder: SysPath, seed: int, index: str, text: str) -> SysPa
 
 class Predictor(BasePredictor):
     def setup(self):
-        model_id = "unsloth/Phi-4-reasoning-plus"
+        model_id = "unsloth/Phi-4-reasoning-plus-unsloth-bnb-4bit"
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Loading model: {model_id} (device={self.device})")
 
@@ -56,12 +56,15 @@ class Predictor(BasePredictor):
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
 
+        FastLanguageModel.for_inference(self.model)
         # Tokenize input and move to model's device
         inputs = self.tokenizer(prompt, return_tensors="pt", truncation=False)
 
         # Move input tensors to the same device as the model
         device = next(self.model.parameters()).device
         inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+
+        input_len = inputs["input_ids"].shape[-1]
 
         # Generate text with cache configuration disabled
         with torch.no_grad():
@@ -73,11 +76,15 @@ class Predictor(BasePredictor):
                 temperature=temperature,
                 top_p=top_p,
                 pad_token_id=self.tokenizer.eos_token_id,
-                use_cache=False,  # Disable cache to avoid static cache issues
+                use_cache=True, 
             )
 
         # Decode the generated text
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        generated_ids = outputs[0][input_len:]
+        generated_text = self.tokenizer.decode(
+        generated_ids,
+        skip_special_tokens=True
+        ).strip()
 
         # Log results
         print(f"\n[Prompt]: {prompt}")
