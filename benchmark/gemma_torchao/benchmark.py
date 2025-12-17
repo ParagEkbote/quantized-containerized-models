@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def calculate_efficiency(tokens_per_sec):
+def calculate_efficiency(tokens_per_sec: float) -> str:
     if tokens_per_sec >= 50:
         return "Excellent"
     if tokens_per_sec >= 20:
@@ -29,7 +29,7 @@ def calculate_efficiency(tokens_per_sec):
     return "Poor"
 
 
-def benchmark_gemma3_vlm(num_runs=3):
+def benchmark_gemma3_vlm(num_runs: int = 3):
     deployment_id = (
         "paragekbote/gemma3-torchao-quant-sparse:"
         "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
@@ -56,14 +56,14 @@ def benchmark_gemma3_vlm(num_runs=3):
 
     results = {
         "deployment_id": deployment_id,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now().astimezone().isoformat(),
         "input_params": input_params,
         "runs": [],
     }
 
-    run_times = []
-    token_counts = []
-
+    # --------------------------------------------------
+    # Execute runs (canonical record)
+    # --------------------------------------------------
     for i in range(1, num_runs + 1):
         logger.info(f"--- Run {i}/{num_runs} ---")
 
@@ -71,65 +71,106 @@ def benchmark_gemma3_vlm(num_runs=3):
             start = time.time()
             raw_output = safe_replicate_run(deployment_id, input_params)
             output = normalize_output(raw_output)
-
             elapsed = time.time() - start
-            run_times.append(elapsed)
 
             if isinstance(output, bytes):
-                output_length = len(output)
-                word_count = 0
+                text = None
+                output_chars = len(output)
+                output_words = None
             else:
-                output_length = len(output)
-                word_count = len(output.split())
-                token_counts.append(word_count)
+                text = str(output)
+                output_chars = len(text)
+                output_words = len(text.split())
+
+            out_path = os.path.join(out_dir, f"gemma3_vlm_output_run_{i}.txt")
+
+            if text is None:
+                with open(out_path, "wb") as f:
+                    f.write(output)
+            else:
+                with open(out_path, "w", encoding="utf-8") as f:
+                    f.write(text)
 
             results["runs"].append({
                 "run_number": i,
                 "elapsed_time": elapsed,
-                "output_chars": output_length,
-                "output_words": word_count,
+                "output_chars": output_chars,
+                "output_words": output_words,
+                "output_file": out_path,
                 "status": "success",
             })
 
-            out_path = os.path.join(out_dir, f"gemma3_vlm_output_run_{i}.txt")
-            with open(out_path, "wb" if isinstance(output, bytes) else "w") as f:
-                f.write(output)
+            logger.info(f"Run {i} succeeded in {elapsed:.3f}s")
 
         except Exception as e:
-            err = str(e)
-            logger.error(f"Run failed: {err}")
-            results["runs"].append({"run_number": i, "status": "failed", "error": err})
+            logger.exception("Run failed")
+            results["runs"].append({
+                "run_number": i,
+                "status": "failed",
+                "error": str(e),
+            })
 
-    if run_times:
-        avg = sum(run_times) / len(run_times)
-        mn = min(run_times)
-        mx = max(run_times)
+    # --------------------------------------------------
+    # Statistics derived FROM runs
+    # --------------------------------------------------
+    successful_runs = [
+        r for r in results["runs"]
+        if r.get("status") == "success"
+    ]
 
-        avg_words = sum(token_counts) / len(token_counts) if token_counts else 0
+    times = [r["elapsed_time"] for r in successful_runs]
+    word_runs = [r for r in successful_runs if r.get("output_words") is not None]
+
+    if times:
+        avg = sum(times) / len(times)
+        mn = min(times)
+        mx = max(times)
+        std = (sum((t - avg) ** 2 for t in times) / len(times)) ** 0.5
+        cv = (std / avg * 100) if avg else None
+
+        avg_words = (
+            sum(r["output_words"] for r in word_runs) / len(word_runs)
+            if word_runs else 0
+        )
+
         tps = avg_words / avg if avg else 0
 
-        std = (sum((t - avg) ** 2 for t in run_times) / len(run_times)) ** 0.5
-        cv = std / avg * 100 if avg else 0
+        cold_run = successful_runs[0]
+        warm_runs = successful_runs[1:]
+        warm_avg = (
+            sum(r["elapsed_time"] for r in warm_runs) / len(warm_runs)
+            if warm_runs else None
+        )
 
-        cold = run_times[0]
-        warm = run_times[1:]
-        warm_avg = sum(warm) / len(warm) if warm else None
+        consistency = max(0, min(100, 100 - (cv or 0)))
 
         results["statistics"] = {
-            "successful_runs": len(run_times),
-            "failed_runs": num_runs - len(run_times),
+            "successful_runs": len(successful_runs),
+            "failed_runs": num_runs - len(successful_runs),
+
             "avg_time": avg,
             "min_time": mn,
             "max_time": mx,
             "time_std_dev": std,
             "time_variability_cv": cv,
+
             "avg_words": avg_words,
             "avg_tokens_per_sec": tps,
-            "cold_start_time": cold,
+
+            "cold_start": {
+                "run_number": cold_run["run_number"],
+                "elapsed_time": cold_run["elapsed_time"],
+                "output_file": cold_run["output_file"],
+            },
+
             "avg_warm_time": warm_avg,
-            "cold_vs_warm_ratio": cold / warm_avg if warm_avg else None,
+            "cold_vs_warm_ratio": (
+                cold_run["elapsed_time"] / warm_avg
+                if warm_avg else None
+            ),
+
             "efficiency_rating": calculate_efficiency(tps),
-            "consistency_score": max(0, 100 - cv),
+            "consistency_score": consistency,
         }
 
     out_json = os.path.join(out_dir, "gemma3_vlm_benchmark_results.json")

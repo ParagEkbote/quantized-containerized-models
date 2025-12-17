@@ -90,4 +90,4 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](../LIC
 
 ---
 
-**Ready to get started?** → [Quick Start Guide](docs/quickstart.md)
+**Ready to get started?** → [Quick Start Guide](quickstart.md)

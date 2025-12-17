@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def benchmark_flux_text2img(num_runs=3):
+def benchmark_flux_text2img(num_runs: int = 3):
     deployment_id = (
         "paragekbote/flux-fast-lora-hotswap:"
         "a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
@@ -36,12 +36,13 @@ def benchmark_flux_text2img(num_runs=3):
     results = {
         "deployment_id": deployment_id,
         "input_params": input_params,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now().astimezone().isoformat(),
         "runs": [],
     }
 
-    run_times = []
-
+    # --------------------------------------------------
+    # Execute runs (single source of truth)
+    # --------------------------------------------------
     for i in range(1, num_runs + 1):
         logger.info(f"--- Run {i}/{num_runs} ---")
 
@@ -50,8 +51,6 @@ def benchmark_flux_text2img(num_runs=3):
             raw_out = safe_replicate_run(deployment_id, input_params)
             output = normalize_output(raw_out)
             elapsed = time.time() - start
-
-            run_times.append(elapsed)
 
             out_path = os.path.join(out_dir, f"flux_text2img_run_{i}.png")
             with open(out_path, "wb") as f:
@@ -64,34 +63,63 @@ def benchmark_flux_text2img(num_runs=3):
                 "status": "success",
             })
 
+            logger.info(f"Run {i} succeeded in {elapsed:.3f}s")
+
         except Exception as e:
-            err = str(e)
-            logger.error(f"Run failed: {err}")
-            results["runs"].append({"run_number": i, "status": "failed", "error": err})
+            logger.exception("Run failed")
+            results["runs"].append({
+                "run_number": i,
+                "status": "failed",
+                "error": str(e),
+            })
 
-    if run_times:
-        avg = sum(run_times) / len(run_times)
-        mn = min(run_times)
-        mx = max(run_times)
+    # --------------------------------------------------
+    # Derive statistics FROM recorded runs
+    # --------------------------------------------------
+    successful_runs = [
+        r for r in results["runs"]
+        if r.get("status") == "success"
+    ]
 
-        std = (sum((t - avg) ** 2 for t in run_times) / len(run_times)) ** 0.5
-        cv = std / avg * 100
+    times = [r["elapsed_time"] for r in successful_runs]
 
-        cold = run_times[0]
-        warm = run_times[1:]
-        warm_avg = sum(warm) / len(warm) if warm else None
+    if times:
+        avg = sum(times) / len(times)
+        mn = min(times)
+        mx = max(times)
+        std = (sum((t - avg) ** 2 for t in times) / len(times)) ** 0.5
+        cv = (std / avg * 100) if avg else None
+
+        cold_run = successful_runs[0]
+        warm_runs = successful_runs[1:]
+
+        warm_avg = (
+            sum(r["elapsed_time"] for r in warm_runs) / len(warm_runs)
+            if warm_runs else None
+        )
 
         results["statistics"] = {
-            "successful_runs": len(run_times),
-            "failed_runs": num_runs - len(run_times),
+            "successful_runs": len(successful_runs),
+            "failed_runs": num_runs - len(successful_runs),
+
             "avg_latency": avg,
             "min_latency": mn,
             "max_latency": mx,
             "std_latency": std,
             "latency_cv": cv,
-            "cold_start_latency": cold,
+
+            # 🔗 Explicit linkage to real output
+            "cold_start": {
+                "run_number": cold_run["run_number"],
+                "elapsed_time": cold_run["elapsed_time"],
+                "output_file": cold_run["output_file"],
+            },
+
             "warm_avg_latency": warm_avg,
-            "cold_vs_warm_ratio": cold / warm_avg if warm_avg else None,
+            "cold_vs_warm_ratio": (
+                cold_run["elapsed_time"] / warm_avg
+                if warm_avg else None
+            ),
         }
 
     out_json = os.path.join(out_dir, "flux_text2img_benchmark.json")
