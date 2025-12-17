@@ -28,15 +28,15 @@
 
 We provide **5 production-ready deployments** showcasing different model types and quantization strategies:
 
-| Deployment | Model Type | Quantization | Use Case | Status |
-|-----------|------------|--------------|----------|---------|
-| [Text Generation](deployments/text-generation.md) | LLM (7B params) | INT8 | Content creation, chatbots | ✅ Live |
-| [Image Classification](deployments/image-classification.md) | Vision Model | INT8 | Image tagging, recognition | ✅ Live |
-| [Object Detection](deployments/object-detection.md) | YOLO-based | INT4 | Real-time detection | ✅ Live |
-| [Sentiment Analysis](deployments/sentiment-analysis.md) | BERT-based | INT8 | Text classification | ✅ Live |
-| [Image Generation](deployments/image-generation.md) | Diffusion Model | Mixed (INT8/FP16) | AI art, creative tools | ✅ Live |
+| Deployment | Model Type | Quantization |  Status |
+|-----------|------------|--------------|---------|
+| [Flux Fast Lora Hotswap Img2Img](deployment.md) | Image To Image Diffusion Model | NF4 + torch.compile |  ✅ Live |
+|[Flux Fast Lora Hotswap](deployment.md) | Text To Image Diffusion Model| NF4 + torch.compile |  ✅ Live |
+| [Gemma Torchao](deployment.md) | YOLO-based | INT8+torch.compile+sparsification |  ✅ Live |
+| [Phi4 Reasoning Plus Unsloth](deployment.md) | BERT-based | 4 bit |  ✅ Live |
+| [SmolLM3 Pruna](deployment.md) | Diffusion Model | HQQ+torch.compile |  ✅ Live |
 
-[View all deployment details →](docs/deployment.md)
+[View all deployment details →](deployment.md)
 
 ---
 
