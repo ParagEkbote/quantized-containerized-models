@@ -1,81 +1,60 @@
-name: Push to Replicate (CD)
+name: Continuous Deployment (CD)
 
 on:
   workflow_dispatch:
     inputs:
       model_name:
-        description: 'Enter model name: smollm3 | unsloth | flux-fast-lora | flux-fast-lora-img2img | gemma-torchao'
+        description: "Model to deploy"
         required: true
+        type: choice
+        options:
+          - smollm3
+          - unsloth
+          - flux-fast-lora
+          - flux-fast-lora-img2img
+          - gemma-torchao
 
 jobs:
-  push_to_replicate:
+  preflight:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Free disk space (for large models)
-        if: contains(fromJSON('["smollm3","flux-fast-lora","flux-fast-lora-img2img","gemma-torchao"]'), inputs.model_name)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          docker-images: false
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Cache UV dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
+      - run: |
+          pip install uv
+          uv pip install --system ".[dev,unit,integration]"
 
-      - name: Install UV
-        run: pip install -U uv
+      - name: Lint
+        run: make lint
 
-      - name: Install Dependencies
+      - name: Unit tests
+        run: pytest -m unit
+
+      - name: Integration tests
+        run: pytest -m integration
+
+  deploy:
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Modal
+        run: pip install modal
+
+      - name: Authenticate Modal
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+
+      - name: Deploy via Modal + Cog
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
         run: |
-          case "${{ inputs.model_name }}" in
-            smollm3) uv install -G smollm3 ;;
-            unsloth) uv install -G unsloth ;;
-            flux-fast-lora) uv install -G flux-fast-lora ;;
-            flux-fast-lora-img2img) uv install -G flux-fast-lora-img2img ;;
-            gemma-torchao) uv install -G gemma-torchao ;;
-            *) echo "Unknown model_name: ${{ inputs.model_name }}" && exit 1 ;;
-          esac
-
-      - name: Run Pre-commit
-        run: uv run lint
-
-      - name: Run Tests
-        run: uv run test
-
-      - name: Setup Cog
-        uses: replicate/setup-cog@v2
-        with:
-          token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
-          install-cuda: true
-
-      - name: Validate Cog Build
-        run: |
-          cd src/models/${{ inputs.model_name }}
-          cog build
-
-      - name: Push Model to Replicate
-        if: github.ref == 'refs/heads/main'
-        run: |
-          cd src/models/${{ inputs.model_name }}
-          cog push replicate/ParagEkbote/${{ inputs.model_name }}
-
-      - name: Deployment Summary
-        if: always()
-        run: |
-          echo "✅ Model deployed successfully!"
-          echo "Model: ${{ inputs.model_name }}"
-          echo "Owner: ParagEkbote"
-          echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          modal run dev.modal.deploy_and_test \
+            --model-name "${{ inputs.model_name }}"
