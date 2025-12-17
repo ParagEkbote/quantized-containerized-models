@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 def benchmark_flux_text2img(num_runs: int = 3):
     deployment_id = (
-        "paragekbote/flux-fast-lora-hotswap:"
-        "a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
+        "paragekbote/flux-fast-lora-hotswap-img2img:"
+        "e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
     )
 
     out_dir = os.getenv("BENCHMARK_OUTPUT_DIR", ".")
