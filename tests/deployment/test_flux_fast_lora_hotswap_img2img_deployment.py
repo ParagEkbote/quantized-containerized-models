@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import requests
 
-
 # ------------------------------------------------------
 # Skip RULES (module-level)
 # ------------------------------------------------------
@@ -28,6 +27,7 @@ if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/
 # HELPER: wait loop
 # ------------------------------------------------------
 
+
 def wait_for_server(url="http://localhost:5000/ping", timeout=60):
     start = time.time()
     while time.time() - start < timeout:
@@ -45,6 +45,7 @@ def wait_for_server(url="http://localhost:5000/ping", timeout=60):
 # TEST 1 — Build
 # ------------------------------------------------------
 
+
 @pytest.mark.deployment
 def test_flux_fast_lora_hotswap_img2img_container_builds():
     result = subprocess.run(
@@ -53,13 +54,13 @@ def test_flux_fast_lora_hotswap_img2img_container_builds():
         stderr=subprocess.PIPE,
         text=True,
     )
-    assert result.returncode == 0, \
-        f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert result.returncode == 0, f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
 
 
 # ------------------------------------------------------
 # TEST 2 — Serve boots
 # ------------------------------------------------------
+
 
 @pytest.mark.deployment
 def test_flux_fast_lora_hotswap_img2img_server_boots():
@@ -79,6 +80,7 @@ def test_flux_fast_lora_hotswap_img2img_server_boots():
 # ------------------------------------------------------
 # TEST 3 — 422 for missing schema fields
 # ------------------------------------------------------
+
 
 @pytest.mark.deployment
 def test_flux_fast_lora_hotswap_img2img_missing_fields():
@@ -104,6 +106,7 @@ def test_flux_fast_lora_hotswap_img2img_missing_fields():
 # TEST 4 — Full inference
 # ------------------------------------------------------
 
+
 @pytest.mark.deployment
 def test_flux_fast_lora_hotswap_img2img_full_prediction():
     proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -118,7 +121,7 @@ def test_flux_fast_lora_hotswap_img2img_full_prediction():
             "init_image": "https://images.pexels.com/photos/33649783/pexels-photo-33649783.jpeg",
             "trigger_word": "Painting",
             "guidance_scale": 6.7,
-            "num_inference_steps": 28
+            "num_inference_steps": 28,
         }
 
         resp = requests.post(

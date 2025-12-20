@@ -35,7 +35,7 @@ def normalize_output(output):
     Handles file URLs returned when Cog predict() returns Path objects.
     """
     logger.debug(f"normalize_output called with type: {type(output)}")
-    
+
     # Case 1: FileOutput object with .read() method
     if hasattr(output, "read"):
         logger.info("Output has read() method - treating as FileOutput")
@@ -56,7 +56,7 @@ def normalize_output(output):
     # Case 2: URL string pointing to a file (common when Cog returns Path)
     if isinstance(output, str):
         logger.debug(f"Output is string, length: {len(output)}")
-        
+
         # Check if it's a URL
         if output.startswith('http://') or output.startswith('https://'):
             logger.info(f"Detected URL output: {output}")
@@ -66,7 +66,7 @@ def normalize_output(output):
                 response.raise_for_status()
                 logger.info(f"HTTP {response.status_code}, Content-Type: {response.headers.get('content-type')}")
                 logger.debug(f"Response length: {len(response.content)} bytes")
-                
+
                 # Try to decode as text, fallback to bytes
                 try:
                     text = response.text
@@ -76,18 +76,18 @@ def normalize_output(output):
                 except Exception as e:
                     logger.warning(f"Could not decode response as text: {e}")
                     return response.content
-                    
+
             except requests.exceptions.RequestException as e:
                 logger.error(f"Failed to fetch URL {output}: {e}")
                 logger.warning("Returning URL string as fallback")
                 return output
-        
+
         # Check if it looks like a file path (might be returned in some cases)
         elif '/tmp/' in output or 'output_' in output:
             logger.warning(f"Output looks like a file path but not a URL: {output}")
             logger.warning("Cannot access local paths from client - model may be misconfigured")
             return output
-        
+
         # If not a URL or path, return as-is (direct text output)
         logger.debug("String output is not URL or path - treating as direct text")
         logger.debug(f"Text preview: {output[:200]}")
@@ -101,17 +101,17 @@ def normalize_output(output):
             if not isinstance(output, list):
                 logger.debug("Converting iterator to list")
                 output = list(output)
-            
+
             logger.debug(f"List length: {len(output)}")
-            
+
             if not output:
                 logger.warning("Empty list/iterator")
                 return ""
-            
+
             # Check if list contains URLs (multiple file outputs)
             first_item = output[0]
             logger.debug(f"First item type: {type(first_item)}, value: {str(first_item)[:100]}")
-            
+
             if isinstance(first_item, str) and (
                 first_item.startswith('http://') or first_item.startswith('https://')
             ):
@@ -127,14 +127,14 @@ def normalize_output(output):
                 except requests.exceptions.RequestException as e:
                     logger.error(f"Failed to fetch URL from list: {e}")
                     return str(first_item)
-            
+
             # Otherwise treat as streaming text chunks
             logger.debug("Joining list items as text chunks")
             result = "".join(str(chunk) for chunk in output)
             logger.debug(f"Joined result length: {len(result)}")
             logger.debug(f"Joined result preview: {result[:200]}")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error processing iterable: {e}")
             return str(output)
@@ -143,13 +143,13 @@ def normalize_output(output):
     if isinstance(output, dict):
         logger.info("Output is dictionary")
         logger.debug(f"Dict keys: {list(output.keys())}")
-        
+
         # Try common keys that might contain the actual output
         for key in ['output', 'text', 'response', 'generated_text', 'result']:
             if key in output:
                 logger.info(f"Found '{key}' in dict, recursively normalizing")
                 return normalize_output(output[key])
-        
+
         logger.warning("No standard output key found in dict, stringifying")
         logger.debug(f"Dict contents: {output}")
         return str(output)

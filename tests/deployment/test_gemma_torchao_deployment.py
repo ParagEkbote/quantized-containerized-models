@@ -59,9 +59,7 @@ def test_gemma_torchao_container_builds() -> None:
         text=True,
     )
 
-    assert (
-        result.returncode == 0
-    ), f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert result.returncode == 0, f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
 
 
 # ------------------------------------------------------
@@ -149,7 +147,7 @@ def test_gemma_torchao_full_prediction(tmp_path: Path) -> None:
         # Minimal but realistic payload matching gemma-torchao schema
         payload = {
             "prompt": "Explain the difference between supervised and unsupervised learning in one paragraph.",
-            "image_url": None,          # optional, exercising pure text path
+            "image_url": None,  # optional, exercising pure text path
             "max_new_tokens": 128,
             "temperature": 0.7,
             "top_p": 0.9,

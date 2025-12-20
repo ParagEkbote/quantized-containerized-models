@@ -43,7 +43,7 @@ def test_gemma_torchao_two_paths():
     # --------------------------
     # Request 1 — Quantization
     # --------------------------
-    req_quant =  normalize_string_bools(
+    req_quant = normalize_string_bools(
         {
             **BASE_INPUT,
             "use_quantization": True,

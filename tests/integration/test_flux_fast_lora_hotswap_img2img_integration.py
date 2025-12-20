@@ -14,10 +14,7 @@ logger.setLevel(logging.INFO)
 # -----------------------------------------------------
 # Deployment ID (PINNED)
 # -----------------------------------------------------
-DEPLOYMENT_ID = (
-    "paragekbote/flux-fast-lora-hotswap-img2img:"
-    "e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
-)
+DEPLOYMENT_ID = "paragekbote/flux-fast-lora-hotswap-img2img:e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
 
 # -----------------------------------------------------
 # Base input (SCHEMA-CORRECT)
@@ -28,6 +25,7 @@ BASE_INPUT = {
     "init_image": "https://images.pexels.com/photos/33649783/pexels-photo-33649783.jpeg",
     "seed": 42,
 }
+
 
 @pytest.mark.integration
 @pytest.mark.slow
@@ -74,9 +72,7 @@ def test_flux_fast_lora_img2img_two_adapters():
 
         # Output must be image URL or path
         assert isinstance(output, str)
-        assert (
-            output.startswith("http") or output.endswith(".png")
-        ), f"Unexpected output format: {output}"
+        assert output.startswith("http") or output.endswith(".png"), f"Unexpected output format: {output}"
 
         results.append((req["trigger_word"], output, elapsed))
 
@@ -86,10 +82,7 @@ def test_flux_fast_lora_img2img_two_adapters():
     (mode1, img1, t1), (mode2, img2, t2) = results
 
     # Adapter switching signal (reasonable for image LoRAs)
-    assert img1 != img2, (
-        "LoRA adapter switching did not produce distinct outputs "
-        "(possible adapter misrouting)"
-    )
+    assert img1 != img2, "LoRA adapter switching did not produce distinct outputs (possible adapter misrouting)"
 
     # Latency sanity check (loose by design)
     ratio = t1 / t2 if t2 > 0 else float("inf")

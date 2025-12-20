@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import requests
 
-
 # ------------------------------------------------------
 # Skip if Modal credentials missing
 # ------------------------------------------------------
@@ -54,8 +53,7 @@ def test_phi4_reasoning_container_builds():
         text=True,
     )
 
-    assert result.returncode == 0, \
-        f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert result.returncode == 0, f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
 
 
 # ------------------------------------------------------
@@ -105,19 +103,12 @@ def test_phi4_reasoning_missing_fields():
 # ------------------------------------------------------
 @pytest.mark.deployment
 def test_phi4_reasoning_full_prediction():
-
     proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     try:
         assert wait_for_server(), "Server did not become ready"
 
-        payload = {
-            "seed": 42,
-            "top_p": 0.95,
-            "prompt": "Why is the sky blue?",
-            "temperature": 0.7,
-            "max_new_tokens": 30
-        }
+        payload = {"seed": 42, "top_p": 0.95, "prompt": "Why is the sky blue?", "temperature": 0.7, "max_new_tokens": 30}
 
         response = requests.post(
             "http://localhost:5000/predictions",

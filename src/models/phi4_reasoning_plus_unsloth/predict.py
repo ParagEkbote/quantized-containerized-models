@@ -76,15 +76,12 @@ class Predictor(BasePredictor):
                 temperature=temperature,
                 top_p=top_p,
                 pad_token_id=self.tokenizer.eos_token_id,
-                use_cache=True, 
+                use_cache=True,
             )
 
         # Decode the generated text
         generated_ids = outputs[0][input_len:]
-        generated_text = self.tokenizer.decode(
-        generated_ids,
-        skip_special_tokens=True
-        ).strip()
+        generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
 
         # Log results
         print(f"\n[Prompt]: {prompt}")

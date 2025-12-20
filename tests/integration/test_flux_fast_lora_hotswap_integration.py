@@ -14,10 +14,7 @@ logger.setLevel(logging.INFO)
 # -----------------------------------------------------
 # Deployment ID (FULLY QUALIFIED & PINNED)
 # -----------------------------------------------------
-DEPLOYMENT_ID = (
-    "paragekbote/flux-fast-lora-hotswap:"
-    "a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
-)
+DEPLOYMENT_ID = "paragekbote/flux-fast-lora-hotswap:a958687317369721e1ce66e5436fa989bcff2e40a13537d9b4aa4c6af4a34539"
 
 # -----------------------------------------------------
 # Base request (IMG2IMG SAFE)
@@ -25,6 +22,7 @@ DEPLOYMENT_ID = (
 BASE_REQUEST = {
     "prompt": "A serene mountain landscape during sunrise.",
 }
+
 
 @pytest.mark.integration
 @pytest.mark.slow
@@ -71,9 +69,7 @@ def test_flux_fast_lora_two_modes():
 
         # Basic output validation
         assert isinstance(output, str)
-        assert (
-            output.startswith("http") or output.endswith(".png")
-        ), f"Unexpected output format: {output}"
+        assert output.startswith("http") or output.endswith(".png"), f"Unexpected output format: {output}"
 
         results.append((req["trigger_word"], output, elapsed))
 
@@ -84,10 +80,7 @@ def test_flux_fast_lora_two_modes():
 
     # Do NOT require images to differ byte-for-byte,
     # but URLs should generally differ across adapters.
-    assert img1 != img2, (
-        "LoRA adapter switching did not produce distinct outputs "
-        "(unexpected but indicates possible adapter misrouting)."
-    )
+    assert img1 != img2, "LoRA adapter switching did not produce distinct outputs (unexpected but indicates possible adapter misrouting)."
 
     # Latency sanity check (loose by design)
     ratio = t1 / t2 if t2 > 0 else float("inf")

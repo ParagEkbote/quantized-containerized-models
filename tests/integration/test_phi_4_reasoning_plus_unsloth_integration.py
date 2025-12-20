@@ -14,10 +14,7 @@ logger.setLevel(logging.INFO)
 # -----------------------------------------------------
 # Deployment ID (PINNED)
 # -----------------------------------------------------
-DEPLOYMENT_ID = (
-    "paragekbote/phi-4-reasoning-plus-unsloth:"
-    "a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"
-)
+DEPLOYMENT_ID = "paragekbote/phi-4-reasoning-plus-unsloth:a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"
 
 # -----------------------------------------------------
 # Base input (TEXT SAFE)
