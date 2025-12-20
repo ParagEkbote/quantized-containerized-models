@@ -1,10 +1,9 @@
-# tests/integration/test_gemma_torchao.py
 import logging
 import os
-import time
 
 import pytest
-import replicate
+
+from integration.utils import run_and_time
 
 # -----------------------------------------------------
 # Logging configuration
@@ -12,82 +11,96 @@ import replicate
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# -----------------------------------------------------------
-# Replace with your actual Replicate deployment ID
-# -----------------------------------------------------------
-DEPLOYMENT_ID = "paragekbote/flux-fast-lora-hotswap-img2img:e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
+# -----------------------------------------------------
+# Deployment ID (PINNED)
+# -----------------------------------------------------
+DEPLOYMENT_ID = (
+    "paragekbote/flux-fast-lora-hotswap-img2img:"
+    "e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
+)
 
-
+# -----------------------------------------------------
+# Base input (SCHEMA-CORRECT)
+# -----------------------------------------------------
 BASE_INPUT = {
-    "prompt": "Compare supervised, unsupervised and reinforcement learning briefly.",
-    "image_url": None,
+    "prompt": "A serene mountain landscape during sunrise.",
+    # Public image URL required by schema
+    "init_image": "https://images.pexels.com/photos/33649783/pexels-photo-33649783.jpeg",
     "seed": 42,
-    "max_new_tokens": 50,
-    "temperature": 0.7,
-    "top_p": 0.9,
 }
 
-
 @pytest.mark.integration
-@pytest.mark.skipif("REPLICATE_API_TOKEN" not in os.environ, reason="Replicate API token not found")
-def test_gemma_torchao_two_paths():
+@pytest.mark.slow
+@pytest.mark.skipif(
+    "REPLICATE_API_TOKEN" not in os.environ,
+    reason="Replicate API token not found",
+)
+def test_flux_fast_lora_img2img_two_adapters():
     """
-    Integration test for the Gemma TorchAO predictor:
-    - Call 1: quantization enabled, NO sparsity
-    - Call 2: quantization disabled, sparsity enabled
+    Integration test for Flux Fast LoRA Img2Img predictor.
+
+    - Call 1: trigger_word='Anime' (open-image-preferences)
+    - Call 2: trigger_word='GHIBSKY' (flux-ghibsky)
+
+    Verifies:
+    - both adapters run successfully
+    - valid image outputs are produced
+    - latency characteristics are reasonable
     """
 
-    # ---------------------------------------------------
-    # First call — INT8 quantization only
-    # ---------------------------------------------------
-    request_quant = {
-        **BASE_INPUT,
-        "use_quantization": "true",
-        "use_sparsity": "false",
-    }
+    requests = [
+        {**BASE_INPUT, "trigger_word": "Anime"},
+        {**BASE_INPUT, "trigger_word": "GHIBSKY"},
+    ]
 
-    # ---------------------------------------------------
-    # Second call — Sparsity only (layer_norm, ratio=0.2)
-    # ---------------------------------------------------
-    request_sparse = {
-        **BASE_INPUT,
-        "use_quantization": "false",
-        "use_sparsity": "true",
-        "sparsity_type": "layer_norm",
-        "sparsity_ratio": 0.2,
-    }
+    results = []
 
-    collected = []
+    for req in requests:
+        logger.info("Calling model with trigger_word=%s", req["trigger_word"])
+        logger.info("Input params: %s", req)
 
-    for request in (request_quant, request_sparse):
-        start = time.time()
-        raw = replicate.run(DEPLOYMENT_ID, input=request)
-        elapsed = time.time() - start
+        output, elapsed = run_and_time(
+            DEPLOYMENT_ID,
+            req,
+            timeout_s=120.0,  # img2img can be slow
+        )
 
-        # Replicate returns either a list of chunks or a single string
-        text_out = "".join(raw) if isinstance(raw, list) else str(raw)
+        logger.info(
+            "Completed trigger_word=%s in %.2fs",
+            req["trigger_word"],
+            elapsed,
+        )
+        logger.info("Output: %s", output)
 
-        assert isinstance(text_out, str)
-        assert len(text_out.strip()) > 10, "Output is too short; model might have failed"
-        assert elapsed < 60, f"Inference exceeded time budget: {elapsed:.2f}s"
+        # Output must be image URL or path
+        assert isinstance(output, str)
+        assert (
+            output.startswith("http") or output.endswith(".png")
+        ), f"Unexpected output format: {output}"
 
-        collected.append((text_out, elapsed, request))
+        results.append((req["trigger_word"], output, elapsed))
 
-    # --------------------------
-    # Post-run comparison checks
-    # --------------------------
-    out1, time1, req1 = collected[0]
-    out2, time2, req2 = collected[1]
+    # -----------------------------------------------------
+    # Cross-run checks
+    # -----------------------------------------------------
+    (mode1, img1, t1), (mode2, img2, t2) = results
 
-    assert out1 != out2, "Quantized vs sparse outputs should not be identical"
+    # Adapter switching signal (reasonable for image LoRAs)
+    assert img1 != img2, (
+        "LoRA adapter switching did not produce distinct outputs "
+        "(possible adapter misrouting)"
+    )
 
-    ratio = time1 / time2 if time2 > 0 else float("inf")
-    assert 0.2 < ratio < 5.0, f"Latency ratio unexpected: {ratio:.2f}"
+    # Latency sanity check (loose by design)
+    ratio = t1 / t2 if t2 > 0 else float("inf")
+    logger.info("Latency ratio (%s / %s) = %.2f", mode1, mode2, ratio)
 
-    logger.info("\n--- Test Summary ---")
-    logger.info("Request 1 (Quantization):", req1)
-    logger.info("Time:", time1)
-    logger.info("Output sample:", out1[:120], "...")
-    logger.info("\nRequest 2 (Sparsity):", req2)
-    logger.info("Time:", time2)
-    logger.info("Output sample:", out2[:120], "...")
+    assert 0.3 < ratio < 3.0, f"Unexpected latency ratio: {ratio:.2f}"
+
+    logger.info(
+        "Flux Fast LoRA Img2Img test passed | %s=%.2fs %s=%.2fs",
+        mode1,
+        t1,
+        mode2,
+        t2,
+    )

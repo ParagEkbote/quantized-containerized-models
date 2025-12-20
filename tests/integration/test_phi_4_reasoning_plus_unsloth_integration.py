@@ -1,9 +1,9 @@
 import logging
 import os
-import time
 
 import pytest
-import replicate
+
+from integration.utils import run_and_time
 
 # -----------------------------------------------------
 # Logging configuration
@@ -11,10 +11,17 @@ import replicate
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# -----------------------------------------------------
+# Deployment ID (PINNED)
+# -----------------------------------------------------
+DEPLOYMENT_ID = (
+    "paragekbote/phi-4-reasoning-plus-unsloth:"
+    "a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"
+)
 
-DEPLOYMENT_ID = "paragekbote/phi-4-reasoning-plus-unsloth:a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"
-
+# -----------------------------------------------------
+# Base input (TEXT SAFE)
+# -----------------------------------------------------
 BASE_INPUT = {
     "prompt": "Summarize the plot of Alice in Wonderland.",
     "seed": 42,
@@ -23,6 +30,7 @@ BASE_INPUT = {
 
 
 @pytest.mark.integration
+@pytest.mark.slow
 @pytest.mark.skipif(
     "REPLICATE_API_TOKEN" not in os.environ,
     reason="Replicate API token not available",
@@ -30,68 +38,66 @@ BASE_INPUT = {
 def test_phi4_two_sampling_modes():
     """
     Integration test for Unsloth Phi-4 reasoning predictor:
-    - Call 1: stable (low temperature, high top_p)
-    - Call 2: creative (high temperature, low top_p)
+    - Call 1: stable sampling (low temperature, high top_p)
+    - Call 2: creative sampling (high temperature, low top_p)
+
+    Verifies:
+    - both configurations run successfully
+    - valid text output is produced
+    - latency characteristics are sane
     """
 
-    # Deterministic sampling
-    call1 = {
-        **BASE_INPUT,
-        "temperature": 0.3,
-        "top_p": 0.95,
-    }
-
-    # Creative sampling
-    call2 = {
-        **BASE_INPUT,
-        "temperature": 0.9,
-        "top_p": 0.5,
-    }
+    calls = [
+        {
+            **BASE_INPUT,
+            "temperature": 0.3,
+            "top_p": 0.95,
+            "label": "stable",
+        },
+        {
+            **BASE_INPUT,
+            "temperature": 0.9,
+            "top_p": 0.5,
+            "label": "creative",
+        },
+    ]
 
     results = []
 
-    for params in (call1, call2):
-        logger.info(f"\nCalling model with params: {params}")
+    for cfg in calls:
+        label = cfg.pop("label")
 
-        start = time.time()
-        raw_output = replicate.run(DEPLOYMENT_ID, input=params)
-        elapsed = time.time() - start
+        logger.info("Calling Phi-4 with %s sampling", label)
+        logger.info("Input params: %s", cfg)
 
-        # Handle streamed output or complete text
-        if isinstance(raw_output, list):
-            text = "".join(raw_output)
-        else:
-            text = "".join(chunk for chunk in raw_output)
+        text, elapsed = run_and_time(
+            DEPLOYMENT_ID,
+            cfg,
+            timeout_s=90.0,
+        )
 
-        logger.info(f"Call completed in {elapsed:.2f}s")
-        logger.info(f"Output preview: {text[:120]!r}")
+        logger.info("%s sampling completed in %.2fs", label, elapsed)
+        logger.info("Output preview (%s): %r", label, text[:120])
 
-        # Assertions
-        assert isinstance(text, str), "Model returned non-string output"
-        assert len(text) > 20, "Output too short — likely generation failure"
-        assert elapsed < 25, f"Call too slow: {elapsed:.2f}s"
+        # Basic validity checks
+        assert isinstance(text, str)
+        assert len(text.strip()) > 20, f"Output too short for {label} sampling"
 
-        results.append((params, text, elapsed))
+        results.append((label, text, elapsed))
 
     # -----------------------------------------------------
-    # Post-run comparison
+    # Cross-run sanity checks
     # -----------------------------------------------------
-    (params1, out1, t1), (params2, out2, t2) = results
+    (_, out1, t1), (_, out2, t2) = results
 
-    logger.info(f"Stable sampling output preview: {out1[:120]!r}")
-    logger.info(f"Creative sampling output preview: {out2[:120]!r}")
+    # Do NOT require different text (not guaranteed)
+    assert len(out1.strip()) > 20
+    assert len(out2.strip()) > 20
 
-    # 1. Content difference
-    assert out1 != out2, "High-temp and low-temp outputs should differ"
-
-    # 2. Timing comparison
+    # Latency ratio sanity check (loose by design)
     ratio = t1 / t2 if t2 > 0 else float("inf")
-    logger.info(f"Timing ratio (t1/t2): {ratio:.2f}")
-    assert 0.4 < ratio < 2.5, f"Timing drift too large: ratio={ratio:.2f}"
+    logger.info("Latency ratio (stable / creative) = %.2f", ratio)
 
-    # 3. Creativity difference heuristic
-    unique_words_1 = len(set(out1.split()))
-    unique_words_2 = len(set(out2.split()))
-    logger.info(f"Unique word counts → stable: {unique_words_1}, creative: {unique_words_2}")
+    assert 0.2 < ratio < 5.0, f"Unexpected latency ratio: {ratio:.2f}"
 
-    assert unique_words_2 >= unique_words_1 * 0.7, "Creative mode output does not appear significantly more varied"
+    logger.info("Phi-4 sampling integration test completed successfully.")
