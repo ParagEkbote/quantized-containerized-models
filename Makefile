@@ -136,4 +136,8 @@ build docs:
 clean docs:
 	rm -rf site/
 
+.PHONY:clean docs
+deploy docs:
+	mkdocs gh-deploy --force
+
 .DEFAULT_GOAL := help
