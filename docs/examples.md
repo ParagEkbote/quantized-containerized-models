@@ -10,7 +10,6 @@ cli deployments.
 
 This example runs the **smollm3-3b-smashed** deployment to generate a long-form response.
 
-### Python Example
 
 ```python
 import replicate
@@ -108,10 +107,5 @@ The same inputs work across:
 This ensures **portable inference logic** without rewriting client code.
 
 ---
-
-## Next Examples
-
-* Image generation and Img2Img deployments → see model-specific docs
-* Integration with evaluation pipelines
 
 For endpoint-level details, refer to the [API Reference](deployment.md).

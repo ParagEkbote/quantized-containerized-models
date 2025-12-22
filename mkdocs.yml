@@ -4,10 +4,17 @@ site_description: "Documentation for quantized and containerized AI model deploy
 docs_dir: "docs"
 # site_url: "https://paragekbote.github.io/quantized-containerized-models/"
 
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - Architecture: architecture.md
+  - Deployments & API: deployment.md
+  - Examples: examples.md
+
 theme:
   name: "material"
   font:
-    text: Ubuntu
+    text: Roboto
 
   logo: assets/project_hero_img.webp
   favicon: assets/project_hero_img.ico

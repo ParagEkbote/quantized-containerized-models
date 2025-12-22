@@ -11,7 +11,7 @@ REGISTRY := r8.im
 IMAGE_TAG := $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
 
 MKDOCS = mkdocs
-CONFIG_FILE = /workspaces/ParagEkbote.github.io/mkdocs.yml
+CONFIG_FILE = mkdocs.yml
 
 # ----------------------------------------
 # Help
@@ -136,8 +136,8 @@ build docs:
 clean docs:
 	rm -rf site/
 
-.PHONY:clean docs
+.PHONY:deploy docs
 deploy docs:
-	mkdocs gh-deploy --force
+	$(MKDOCS) gh-deploy --force
 
 .DEFAULT_GOAL := help

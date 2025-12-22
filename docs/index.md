@@ -1,4 +1,4 @@
-# Home
+# 🏠 Home
 
 ![Project Hero](assets/project_hero_img.webp)
 
@@ -9,18 +9,17 @@
 ## 🚀 Quick Navigation
 
 ### Getting Started
-- [Core Concepts](docs/concepts.md) - Understand quantization and containerization
-- [Quick Start](docs/quickstart.md) - Run your first model
+- [Quick Start](quickstart.md) - Run your first model
 
 ### Architecture & Design
-- [System Architecture](docs/architecture.md) - High-level system design
+- [System Architecture](architecture.md) - High-level system design
 
 ### Deployments
-- [Deployment Overview](docs/deployment.md) - All available model deployments
-- [API Reference](docs/deployment.md) - Complete endpoint documentation
+- [Deployment Overview](deployment.md) - All available model deployments
+- [API Reference](deployment.md) - Complete endpoint documentation
 
 ### Examples & Tutorials
-- [Usage Examples](docs/examples.md) - Common use cases
+- [Usage Examples](examples.md) - Common use cases
 
 ---
 
@@ -28,13 +27,13 @@
 
 We provide **5 production-ready deployments** showcasing different model types and quantization strategies:
 
-| Deployment | Model Type | Quantization |  Status |
-|-----------|------------|--------------|---------|
-| [Flux Fast Lora Hotswap Img2Img](deployment.md) | Image To Image Diffusion Model | NF4 + torch.compile |  ✅ Live |
-|[Flux Fast Lora Hotswap](deployment.md) | Text To Image Diffusion Model| NF4 + torch.compile |  ✅ Live |
-| [Gemma Torchao](deployment.md) | Multimodal LLM | INT8+torch.compile+sparsification |  ✅ Live |
-| [Phi4 Reasoning Plus Unsloth](deployment.md) | BERT-based | 4 bit |  ✅ Live |
-| [SmolLM3 Pruna](deployment.md) | Diffusion Model | HQQ+torch.compile |  ✅ Live |
+| Deployment                     | Modality                  | Optimization Stack                        | Status |
+| ------------------------------ | ------------------------- | ----------------------------------------- | ------ |
+| [Flux Fast Lora Hotswap](deployment.md)         | Text → Image              | torch.compile + BitsAndBytes + PEFT LoRA  | ✅ Live   |
+| [Flux Fast Lora Hotswap Img2Img](deployment.md) | Image → Image             | torch.compile + BitsAndBytes + PEFT LoRA  | ✅ Live   |
+| [SmolLM3 Pruna](deployment.md)   | Text (LLM)| Pruna + HQQ + torch.compile               |✅ Live   |
+|[Phi4 Reasoning Plus Unsloth](deployment.md)  | Reasoning LLM| Unsloth kernels + quantization|✅ Live   |
+|  [Gemma Torchao](deployment.md)                  | Multimodal (Text + Image) | INT8 (torchao) + sparsity + torch.compile | ✅ Live   |
 
 [View all deployment details →](deployment.md)
 
@@ -77,16 +76,16 @@ Combine quantization and containerization for:
 This documentation is organized into focused sections:
 
 **For New Users:**
-Start with [Quick Start](docs/quickstart.md) to run your first model in under 5 minutes.
+Start with [Quick Start](quickstart.md) to run your first model in under 5 minutes.
 
 **For Developers and Builders:**
-Read the [Architecture Overview](docs/architecture.md) to understand the system design and application. Check [API Reference](docs/deployment.md) for endpoint specifications and [Examples](docs/examples.md) for code examples.
+Read the [Architecture Overview](architecture.md) to understand the system design and application. Check [API Reference](deployment.md) for endpoint specifications and [Examples](examples.md) for code examples.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE](../LICENSE) file for details.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](https://www.apache.org/licenses/LICENSE-2.0.html) for details.
 
 ---
 
