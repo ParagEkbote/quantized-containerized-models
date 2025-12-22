@@ -32,7 +32,7 @@ We provide **5 production-ready deployments** showcasing different model types a
 |-----------|------------|--------------|---------|
 | [Flux Fast Lora Hotswap Img2Img](deployment.md) | Image To Image Diffusion Model | NF4 + torch.compile |  ✅ Live |
 |[Flux Fast Lora Hotswap](deployment.md) | Text To Image Diffusion Model| NF4 + torch.compile |  ✅ Live |
-| [Gemma Torchao](deployment.md) | YOLO-based | INT8+torch.compile+sparsification |  ✅ Live |
+| [Gemma Torchao](deployment.md) | Multimodal LLM | INT8+torch.compile+sparsification |  ✅ Live |
 | [Phi4 Reasoning Plus Unsloth](deployment.md) | BERT-based | 4 bit |  ✅ Live |
 | [SmolLM3 Pruna](deployment.md) | Diffusion Model | HQQ+torch.compile |  ✅ Live |
 
