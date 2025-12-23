@@ -1,24 +1,19 @@
-# ⚡ Quick Start
+# Quick Start
 
-This guide helps you run your **first quantized, containerized model** in minutes.
-You can run models **locally with Docker or Cog** or optionally deploy them to Replicate.
+This guide helps you run your **first quantized, containerized model** in minutes. You can run models **locally with Docker or Cog** or optionally deploy them to Replicate.
 
 No vendor lock-in is required.
-
----
 
 ## Prerequisites
 
 Ensure the following are available:
 
-* **Git**
-* **Docker** (with NVIDIA Container Toolkit)
-* **NVIDIA GPU + CUDA drivers** (strongly recommended)
-* **Python 3.11+** (only required for `cog predict`)
+- **Git**
+- **Cog** 
+- **Python 3.11+** (only required for `cog predict`)
 
-> All deployments are Cog-based and can run **fully offline on Docker**, without Replicate.
-
----
+!!! info
+    All deployments are Cog-based and can run **fully offline on Docker**, without Replicate.
 
 ## Step 1: Clone the Repository
 
@@ -27,27 +22,21 @@ git clone <repository-url>
 cd <repository-name>
 ```
 
-This repository contains:
-
-* Cog configurations
-* Quantized model weights
-* Production-ready containers
-
----
+This repository contains Cog configurations, quantized model weights and production-ready containers.
 
 ## Step 2: Choose a Deployment
 
 Pick a deployment based on your task:
 
-* **Text-to-Image** → Flux Fast Lora Hotswap
-* **Image-to-Image** → Flux Fast Lora Hotswap Img2Img
-* **Multimodal Model** → Gemma Torchao
-* **Reasoning Model** → Phi4 Reasoning Plus Unsloth
-* **Lightweight Model** → SmolLM3 Pruna
+| Task | Deployment |
+|------|-----------|
+| Text-to-Image | Flux Fast Lora Hotswap |
+| Image-to-Image | Flux Fast Lora Hotswap Img2Img |
+| Multimodal Model | Gemma Torchao |
+| Reasoning Model | Phi4 Reasoning Plus Unsloth |
+| Lightweight Model | SmolLM3 Pruna |
 
 See the full list in the [Deployment Overview](deployment.md).
-
----
 
 ## Step 3: Run with Docker Only (No Replicate)
 
@@ -62,13 +51,7 @@ docker run -d \
   r8.im/paragekbote/flux-fast-lora-hotswap
 ```
 
-This:
-
-* Launches the model server locally
-* Exposes an HTTP API on port `5000`
-* Uses your local GPU via CUDA
-
----
+This launches the model server locally, exposes an HTTP API on port `5000` and uses your local GPU via CUDA.
 
 ## Step 4: Make an HTTP Inference Request
 
@@ -86,8 +69,6 @@ curl -s -X POST \
 
 The response will contain generated image URLs or streamed outputs, depending on the model.
 
----
-
 ## Step 5: Run with Cog CLI (Local Inference)
 
 If you prefer direct CLI-based inference:
@@ -104,13 +85,7 @@ cog predict \
   -i trigger_word="GHIBSKY"
 ```
 
-This:
-
-* Builds the container if needed
-* Runs inference locally
-* Guarantees the same environment as production
-
----
+This builds the container if needed, runs inference locally and guarantees the same environment as production.
 
 ## Optional: Deploy to Replicate
 
@@ -121,36 +96,32 @@ cog login
 cog push r8.im/<username>/<model-name>
 ```
 
-Deployment is optional.
-**Local Docker and Cog usage are fully supported.**
-
----
+Deployment is optional. **Local Docker and Cog usage are fully supported.**
 
 ## Why This Matters (No Vendor Lock-In)
 
-* Models run identically on **local Docker, on-prem GPUs or cloud**
-* No dependency on proprietary inference services
-* Containers are portable across environments
-* Easy migration between self-hosted and hosted deployments
+- Models run identically on **local Docker, on-prem GPUs or cloud**
+- No dependency on proprietary inference services
+- Containers are portable across environments
+- Easy migration between self-hosted and hosted deployments
 
 This design ensures long-term maintainability and operational freedom.
 
----
-
 ## Next Steps
 
-* 🧱 Understand internals via [Architecture](architecture.md)
-* 🔌 Review inputs and outputs in the [API Reference](deployment.md)
-* 🧪 Explore workflows in [Usage Examples](examples.md)
-
----
+- [Architecture](architecture.md) — Understand internals
+- [API Reference](deployment.md) — Review inputs and outputs
+- [Usage Examples](examples.md) — Explore workflows
 
 ## Troubleshooting
 
-* **Docker can’t see GPU**: Verify `nvidia-smi` and NVIDIA Container Toolkit
-* **Slow inference**: Confirm quantized weights are being used
-* **Schema errors**: Check deployment-specific input fields
+**Docker can't see GPU**
+: Verify `nvidia-smi` and NVIDIA Container Toolkit are installed
+
+**Slow inference**
+: Confirm quantized weights are being used
+
+**Schema errors**
+: Check deployment-specific input fields
 
 For unresolved issues, open a GitHub issue with logs and hardware details.
-
----

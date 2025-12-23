@@ -1,92 +1,105 @@
-# 🏠 Home
+# Home
 
 ![Project Hero](assets/project_hero_img.webp)
 
-**Deploy AI models with an API through quantization and containerization.**
+# Deploy AI Models with Quantization & Containerization
+
+Production-ready, optimized AI model deployments with quantization, compilation and containerization. Run locally, on-prem, or hosted without vendor lock-in.
+
+## Quick Start
+
+Get up and running in under 5 minutes:
+
+1. **Clone the repository** and install dependencies
+2. **Choose a deployment** based on your task (text, image, reasoning, or multimodal)
+3. **Run locally with Docker** or push to Replicate for managed hosting
+
+[Start with the Quick Start Guide →](quickstart.md)
 
 ---
 
-## 🚀 Quick Navigation
+## Available Deployments
 
-### Getting Started
-- [Quick Start](quickstart.md) - Run your first model
+Five production-ready deployments covering text generation, reasoning, multimodal understanding and image generation:
 
-### Architecture & Design
-- [System Architecture](architecture.md) - High-level system design
+| Deployment | Task | Optimization | VRAM |
+|---|---|---|---|
+| **Flux Fast LoRA Hotswap** | Text → Image | torch.compile + BitsAndBytes + LoRA | ~16 GB |
+| **Flux Fast LoRA Hotswap Img2Img** | Image → Image | torch.compile + BitsAndBytes + LoRA | ~18 GB |
+| **SmolLM3 Pruna** | Text Generation | Pruna + HQQ + torch.compile | ~5 GB |
+| **Phi-4 Reasoning Plus** | Reasoning & Explanation | Unsloth kernels + quantization | ~12 GB |
+| **Gemma Torchao** | Multimodal (Vision + Text) | INT8 quantization + sparsity + torch.compile | ~6 GB |
 
-### Deployments
-- [Deployment Overview](deployment.md) - All available model deployments
-- [API Reference](deployment.md) - Complete endpoint documentation
-
-### Examples & Tutorials
-- [Usage Examples](examples.md) - Common use cases
-
----
-
-## 📦 Available Deployments
-
-We provide **5 production-ready deployments** showcasing different model types and quantization strategies:
-
-| Deployment                     | Modality                  | Optimization Stack                        | Status |
-| ------------------------------ | ------------------------- | ----------------------------------------- | ------ |
-| [Flux Fast Lora Hotswap](deployment.md)         | Text → Image              | torch.compile + BitsAndBytes + PEFT LoRA  | ✅ Live   |
-| [Flux Fast Lora Hotswap Img2Img](deployment.md) | Image → Image             | torch.compile + BitsAndBytes + PEFT LoRA  | ✅ Live   |
-| [SmolLM3 Pruna](deployment.md)   | Text (LLM)| Pruna + HQQ + torch.compile               |✅ Live   |
-|[Phi4 Reasoning Plus Unsloth](deployment.md)  | Reasoning LLM| Unsloth kernels + quantization|✅ Live   |
-|  [Gemma Torchao](deployment.md)                  | Multimodal (Text + Image) | INT8 (torchao) + sparsity + torch.compile | ✅ Live   |
-
-[View all deployment details →](deployment.md)
+[Explore all deployments →](deployment.md)
 
 ---
 
-## 🎯 Key Features
+## Features
 
-### Significant Model Improvements
-- **70%+ size reduction** through INT8/INT4 quantization
-- **2-3x faster inference** compared to FP32 models
-- **95-98% accuracy retention** across benchmarks
-- **Cost savings** of 60-75% on inference costs
+### Performance Improvements
 
-### Reproducible Containerization
-- **Cog-based containers** for consistent environments
-- **GPU deployment** with CUDA support
+- **70%+ model size reduction** through INT8/INT4 quantization
+- **2–3× faster inference** compared to FP32 baselines
+- **95–98% accuracy retention** across benchmarks
+- **60–75% cost savings** on inference expenses
+
+### Reproducible Deployments
+
+- **Cog-based containers** ensure identical behavior across environments
+- **GPU optimizations** with CUDA support
+- **Portable execution** across local Docker, on-prem GPUs and cloud platforms
 - **One-command deployment** to Replicate
 
 ---
 
-## 💡 Why This Project?
+### The Result
 
-### The Problem
-Deploying AI models in production is challenging:
-- Large model sizes require expensive hardware
-- Slow inference times impact user experience
-- Inconsistent environments cause deployment failures
-- High costs limit accessibility and scale
+- **Hardware efficiency** — Run larger models on smaller GPUs
+- **Inference speed** — Achieve 2–3× latency improvements
+- **Quality preservation** — Maintain 95–98% output quality
+- **Operational simplicity** — Deploy identically across environments
 
-### Solution
-Combine quantization and containerization for:
-- **Hardware efficiency** - Run larger models on smaller GPUs
-- **Speed** - Faster inference without sacrificing quality
-- **Reproducibility** - Identical behavior across environments
+## Documentation Overview
 
----
+### Getting Started
 
-## 📚 Documentation Structure
+[**Quick Start**](quickstart.md)
+: Set up and run your first model in under 5 minutes using Docker or Cog CLI.
 
-This documentation is organized into focused sections:
+### Understanding the System
 
-**For New Users:**
-Start with [Quick Start](quickstart.md) to run your first model in under 5 minutes.
+[**System Architecture**](architecture.md)
+: Deep dive into quantization strategies, compilation techniques, pruning approaches and design decisions for each deployment.
 
-**For Developers and Builders:**
-Read the [Architecture Overview](architecture.md) to understand the system design and application. Check [API Reference](deployment.md) for endpoint specifications and [Examples](examples.md) for code examples.
+[**Deployment Reference**](deployment.md)
+: Complete specifications for all five deployments including input/output schemas, performance metrics and configuration options.
 
----
+### Building with Examples
 
-## 📄 License
-
-This project is licensed under the Apache 2.0 License - see the [LICENSE](https://www.apache.org/licenses/LICENSE-2.0.html) for details.
+[**Usage Examples**](examples.md)
+: Practical code examples for text generation, reasoning, image generation and multimodal understanding across Python SDK, Docker and Cog CLI.
 
 ---
 
-**Ready to get started?** → [Quick Start Guide](quickstart.md)
+## Core Design Principles
+
+All deployments follow these principles:
+
+- **Post-training optimization** — No retraining required; works with existing models
+- **Inference-first** — Optimized for latency, throughput and memory efficiency
+- **Selective risk** — Preserve fragile model components while aggressively optimizing compute-heavy layers
+- **Portability** — Containerized with Cog and Docker; run anywhere without vendor lock-in
+- **Reproducibility** — Deterministic builds and fixed schemas for consistent behavior
+
+---
+
+## Next Steps
+
+1. **[Quick Start](quick-start.md)** — Get a model running in 5 minutes
+2. **[Deployment Reference](deployment.md)** — Explore available models and APIs
+3. **[Usage Examples](examples.md)** — See practical code for your use case
+4. **[System Architecture](architecture.md)** — Understand the technical implementation
+
+---
+
+**Ready to deploy?** [Start the Quick Start Guide →](quick-start.md)
