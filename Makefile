@@ -1,23 +1,38 @@
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
+
 MODEL_DIR ?= $(CURDIR)
 MODEL_DIR := $(abspath $(MODEL_DIR))
-MODEL_NAME := $(notdir $(MODEL_DIR))
-
-COG_BIN ?= /usr/local/bin/cog
-LOCAL_COG := $(MODEL_DIR)/.cog/bin/cog
-COG_CMD := $(if $(wildcard $(LOCAL_COG)),$(LOCAL_COG),$(COG_BIN))
+MODEL_NAME := $(notdir $(patsubst %/,%,$(MODEL_DIR)))
 
 USERNAME ?= paragekbote
 REGISTRY := r8.im
 IMAGE_TAG := $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
 
-MKDOCS = mkdocs
-CONFIG_FILE = mkdocs.yml
+COG_BIN ?= cog
+COG_CMD := $(shell command -v $(COG_BIN) 2>/dev/null)
+
+MKDOCS ?= mkdocs
+CONFIG_FILE ?= mkdocs.yml
+
+.DEFAULT_GOAL := help
+
+
+# ----------------------------------------
+# Helpers
+# ----------------------------------------
+define require-cog
+	@if [ -z "$(COG_CMD)" ]; then \
+		echo "❌ Cog not found in PATH"; exit 1; \
+	fi
+endef
+
 
 # ----------------------------------------
 # Help
 # ----------------------------------------
 .PHONY: help
-help: ## Show available commands
+help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | sed 's/:.*##/:  /'
 
 
@@ -26,26 +41,20 @@ help: ## Show available commands
 # ----------------------------------------
 .PHONY: login
 login: ## Login to Replicate using Cog
-	@if [ ! -x "$(COG_CMD)" ]; then echo "Cog not found"; exit 1; fi
-	"$(COG_CMD)" login
+	$(call require-cog)
+	$(COG_CMD) login
 
-
-# ----------------------------------------
-# Lint
-# ----------------------------------------
-.PHONY: lint
-lint: ## Run ruff linting and pytest collection checks
-	pre-commit run --all-files || true
-
-
+.PHONY:install-cog
+install-cog: 
+	sh <(curl -fsSL https://cog.run/install.sh)
 # ----------------------------------------
 # Build
 # ----------------------------------------
 .PHONY: build
 build: ## Build Cog image
-	@if [ ! -x "$(COG_CMD)" ]; then echo "Cog not found"; exit 1; fi
-	@if [ ! -f "$(MODEL_DIR)/cog.yaml" ]; then echo "cog.yaml missing"; exit 1; fi
-	cd "$(MODEL_DIR)" && "$(COG_CMD)" build -t "$(MODEL_NAME)"
+	$(call require-cog)
+	@test -f cog.yaml || (echo "❌ cog.yaml missing" && exit 1)
+	cd "$(MODEL_DIR)" && $(COG_CMD) build -t "$(IMAGE_TAG)"
 
 
 # ----------------------------------------
@@ -53,91 +62,78 @@ build: ## Build Cog image
 # ----------------------------------------
 .PHONY: push
 push: ## Push image to Replicate
-	cd "$(MODEL_DIR)" && "$(COG_CMD)" push "$(IMAGE_TAG)"
+	$(call require-cog)
+	cd "$(MODEL_DIR)" && $(COG_CMD) push "$(IMAGE_TAG)"
 
 
 # ----------------------------------------
 # Deploy
 # ----------------------------------------
 .PHONY: deploy
-deploy: ## Auto-login and push
-	@if ! "$(COG_CMD)" whoami >/dev/null 2>&1; then "$(COG_CMD)" login; fi
-	cd "$(MODEL_DIR)" && "$(COG_CMD)" push "$(IMAGE_TAG)"
+deploy: ## Push image (requires prior login)
+	$(call require-cog)
+	@$(COG_CMD) whoami >/dev/null 2>&1 || \
+		(echo "❌ Not logged in. Run make login" && exit 1)
+	cd "$(MODEL_DIR)" && $(COG_CMD) push "$(IMAGE_TAG)"
 
 
 # ----------------------------------------
 # Remove local Docker images
 # ----------------------------------------
 .PHONY: remove-image
-remove-image: ## Remove local Docker images
-	@if command -v docker >/dev/null 2>&1; then \
-		docker rmi -f "$(MODEL_NAME)" 2>/dev/null || true; \
-		docker rmi -f "$(IMAGE_TAG)" 2>/dev/null || true; \
-	fi
+remove-image:
+	@command -v docker >/dev/null 2>&1 || exit 0
+	docker rmi -f "$(IMAGE_TAG)" 2>/dev/null || true
 
 
 # ----------------------------------------
 # Delete local Cog + images
 # ----------------------------------------
 .PHONY: delete-local
-delete-local: ## Delete .cog and local images
-	@if [ -f "$(LOCAL_COG)" ]; then rm -f "$(LOCAL_COG)"; fi
+delete-local:
+	rm -rf .cog
 	$(MAKE) -s remove-image
 
 
 # ----------------------------------------
-# Clean pycache
+# Lint / Tests
 # ----------------------------------------
-.PHONY: clean
-clean: ## Clean __pycache__ and pyc files
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
+.PHONY: lint
+lint:
+	pre-commit run --all-files
+
+.PHONY: all-tests
+unit:
+	pytest -m unit
+
+integration:
+	pytest -m integration
+
+deployment:
+	pytest -m deployment
 
 
 # ----------------------------------------
-# Testing (unit / integration / deployment)
+# CI / CD
 # ----------------------------------------
-.PHONY: unit
-unit: ## Run unit tests
-	pytest -m "unit"
-
-.PHONY: integration
-integration: ## Run integration tests
-	pytest -m "integration"
-
-.PHONY: deployment
-deployment: ## Run deployment tests
-	pytest -m "deployment"
-
-# ----------------------------------------
-# CI → Unit+Linting tests only
-# ----------------------------------------
-.PHONY: ci
+.PHONY: ci cd
 ci: lint unit
+cd: lint unit integration deployment
+
 
 # ----------------------------------------
-# CD → All tests+Linting
+# MkDocs
 # ----------------------------------------
-.PHONY: cd
-cd: lint unit integration deployment ## Run all tests for CD pipeline
+.PHONY: docs-serve docs-build docs-clean docs-deploy
 
-# ----------------------------------------
-# Mkdocs Commands
-# ----------------------------------------
-.PHONY: serve docs
-serve docs:
+docs-serve:
 	$(MKDOCS) serve -f $(CONFIG_FILE)
 
-.PHONY:build docs
-build docs:
+docs-build:
 	$(MKDOCS) build -f $(CONFIG_FILE)
 
-.PHONY:clean docs
-clean docs:
+docs-clean:
 	rm -rf site/
 
-.PHONY:deploy docs
-deploy docs:
+docs-deploy:
 	$(MKDOCS) gh-deploy --force
-
-.DEFAULT_GOAL := help

@@ -1,6 +1,6 @@
 from unsloth import FastLanguageModel  # noqa  # isort: skip
 from pathlib import Path as SysPath
-
+from typing import Any, Dict
 import torch
 from cog import BasePredictor, Input, Path
 
@@ -17,10 +17,10 @@ def save_text(output_folder: SysPath, seed: int, index: str, text: str) -> SysPa
 class Predictor(BasePredictor):
     def setup(self):
         model_id = "unsloth/Phi-4-reasoning-plus-unsloth-bnb-4bit"
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Loading model: {model_id} (device={self.device})")
 
-        # Set appropriate dtype based on device capabilities
         if self.device.type == "cuda":
             try:
                 bf16_ok = torch.cuda.is_bf16_supported()
@@ -30,7 +30,6 @@ class Predictor(BasePredictor):
         else:
             self.dtype = torch.float32
 
-        # Load model and tokenizer with static cache disabled
         self.model, self.tokenizer = FastLanguageModel.from_pretrained(
             model_name=model_id,
             max_seq_length=131072,
@@ -39,58 +38,88 @@ class Predictor(BasePredictor):
             trust_remote_code=True,
             use_cache=True,
         )
+        
+        # Ensure pad token is set
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        self.cache_length = 2048
         print("Setup completed successfully")
 
     def predict(
         self,
-        prompt: str = Input(description="Input text prompt"),
-        max_new_tokens: int = Input(description="Maximum number of new tokens", default=3000, ge=1, le=25000),
-        temperature: float = Input(description="Sampling temperature", default=0.7, ge=0.1, le=1),
-        top_p: float = Input(description="Top-p nucleus sampling", default=0.95, ge=0.1, le=1),
-        seed: int = Input(description="Random seed", default=42),
+        prompt: str = Input(description="User prompt"),
+        max_new_tokens: int = Input(default=512, ge=1, le=40000),
+        temperature: float = Input(default=0.8, ge=0.0, le=1.0),
+        top_p: float = Input(default=0.95, ge=0.0, le=1.0),
+        top_k: int = Input(default=50, ge=1, le=100),
+        seed: int = Input(default=42),
     ) -> Path:
-        # Set random seeds
+        if not prompt or not prompt.strip():
+            raise ValueError("User prompt must be non-empty")
+
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
 
         FastLanguageModel.for_inference(self.model)
-        # Tokenize input and move to model's device
-        inputs = self.tokenizer(prompt, return_tensors="pt", truncation=False)
 
-        # Move input tensors to the same device as the model
-        device = next(self.model.parameters()).device
-        inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+        # ---- MANUAL PHI-4 FORMATTING (bypassing broken chat template) ----
+        # Phi-4 uses this format: <|system|>...<|end|><|user|>...<|end|><|assistant|>
+        system_msg = "You are Phi, a helpful assistant trained by Microsoft. Answer the user's question directly and clearly."
+        
+        formatted_prompt = f"<|system|>\n{system_msg}<|end|>\n<|user|>\n{prompt}<|end|>\n<|assistant|>\n"
+        
+        print(f"[Formatted Prompt]:\n{formatted_prompt}")
+        print(f"[User Question]: {prompt}")
 
-        input_len = inputs["input_ids"].shape[-1]
+        # Tokenize the manually formatted prompt
+        inputs = self.tokenizer(
+            formatted_prompt,
+            return_tensors="pt",
+            add_special_tokens=False,  # We already added Phi-4 special tokens
+        )
 
-        # Generate text with cache configuration disabled
-        with torch.no_grad():
-            outputs = self.model.generate(
-                input_ids=inputs["input_ids"],
-                attention_mask=inputs.get("attention_mask"),
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
+        input_ids = inputs["input_ids"].to(self.model.device)
+        attention_mask = inputs["attention_mask"].to(self.model.device)
+        input_len = input_ids.shape[-1]
+
+        # ---- Correct sampling contract ----
+        do_sample = temperature > 0.0
+
+        gen_kwargs: Dict[str, Any] = dict(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
+            eos_token_id=self.tokenizer.eos_token_id,
+            pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+            use_cache=True,
+        )
+
+        if do_sample:
+            gen_kwargs.update(
                 temperature=temperature,
                 top_p=top_p,
-                pad_token_id=self.tokenizer.eos_token_id,
-                use_cache=True,
+                top_k=top_k,
             )
 
-        # Decode the generated text
+        with torch.no_grad():
+            outputs = self.model.generate(**gen_kwargs)
+
+        # ---- Decode only the NEW tokens (assistant's response) ----
         generated_ids = outputs[0][input_len:]
-        generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+        generated_text = self.tokenizer.decode(
+            generated_ids, 
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=True
+        ).strip()
+        
+        # Clean up any remaining special tokens
+        cleanup_patterns = ["<|end|>", "<|endoftext|>", "<|assistant|>", "<|user|>", "<|system|>"]
+        for pattern in cleanup_patterns:
+            generated_text = generated_text.split(pattern)[0].strip()
 
-        # Log results
-        print(f"\n[Prompt]: {prompt}")
-        print(f"[Generated Output]: {generated_text[:500]}...")
+        print(f"[Assistant Response]: {generated_text[:500]}")
 
-        if torch.cuda.is_available():
-            print(f"Used memory: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
-
-        # Save and return output
         output_path = save_text(SysPath("/tmp"), seed, "pred", generated_text)
-        print(f"Saved output to {output_path}")
         return Path(str(output_path))

@@ -2,20 +2,23 @@ build:
   cog_runtime: true
   gpu: true
   cuda: "12.4"
-  python_version: "3.10"
+  python_version: "3.12"
   system_packages:
     - "git"
     - "cmake"
     - "ninja-build"
-  run:
-    # Update apt, install git (system level)
-    - command: apt-get update && apt-get install -y git
-    - command: apt-get clean && rm -rf /var/lib/apt/lists/*
-    # Install uv (binary, faster than pip)
-    - command: pip install uv
-    # Install Python deps with uv into system Python
-    - command: uv pip install --system packaging wheel ninja cmake torch
-    - command: uv pip install --system -U flash-attn --no-build-isolation
-    - command: uv pip install --system transformers accelerate unsloth unsloth_zoo
 
+  run:
+    - command: pip install --upgrade pip
+  
+  # PyTorch 2.9 with CUDA 12.1
+    - command: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+  # FlashAttention 2.8.3 prebuilt wheel for cu12 + torch2.9 + cp310
+    - command: pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+
+  
+  # Runtime dependencies
+    - command: pip install transformers accelerate unsloth unsloth_zoo
+  
 predict: "predict.py:Predictor"
