@@ -6,28 +6,7 @@ import torch
 from cog import BasePredictor, Input
 from diffusers import DiffusionPipeline
 from diffusers.quantizers import PipelineQuantizationConfig
-from dotenv import load_dotenv
-from huggingface_hub import login
 from PIL import Image
-
-
-def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
-    """
-    Load the Hugging Face token from the environment and log in.
-
-    Args:
-        env_var (str): The environment variable name holding the token.
-
-    Raises:
-        ValueError: If the token is not found in the environment.
-    """
-    load_dotenv()
-    hf_token: str | None = os.getenv(env_var)
-
-    if hf_token:
-        login(token=hf_token)
-    else:
-        raise ValueError(f"{env_var} not found in .env file or environment")
 
 
 def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
@@ -42,12 +21,13 @@ def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
 
 class Predictor(BasePredictor):
     def setup(self):
-        # Login with HF token before loading model
-        login_with_env_token()
+        hf_token = os.environ.get("HF_TOKEN")
 
         self.pipe = DiffusionPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
+            token=hf_token,
             dtype=torch.bfloat16,
+            device_map="cuda",
             quantization_config=PipelineQuantizationConfig(
                 quant_backend="bitsandbytes_4bit",
                 quant_kwargs={
@@ -57,7 +37,7 @@ class Predictor(BasePredictor):
                 },
                 components_to_quantize=["transformer"],
             ),
-        ).to("cuda")
+        )
 
         torch.backends.cudnn.benchmark = True
         torch.backends.cuda.matmul.allow_tf32 = True
@@ -169,7 +149,7 @@ class Predictor(BasePredictor):
             description="Number of denoising steps.",
             default=28,
             ge=1,
-            le=100,
+            le=150,
         ),
     ) -> Path:
         # Switch LoRA adapter efficiently (only if needed)
