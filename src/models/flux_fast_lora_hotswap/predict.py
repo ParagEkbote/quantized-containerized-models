@@ -1,13 +1,36 @@
 import os
 import uuid
 from pathlib import Path
-
+from dotenv import load_dotenv
+from huggingface_hub import login
 import torch
 from cog import BasePredictor, Input
 from diffusers import DiffusionPipeline
 from diffusers.quantizers import PipelineQuantizationConfig
 from PIL import Image
 
+
+
+def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
+    """
+    Load the Hugging Face token from the environment and log in.
+
+    Args:
+        env_var (str): The environment variable name holding the token.
+
+    Raises:
+        ValueError: If the token is not found in the environment.
+    """
+    load_dotenv()  # loads variables from .env file into environment
+    hf_token: str | None = os.getenv(env_var)
+
+    if hf_token:
+        login(token=hf_token)
+    else:
+        raise ValueError(f"{env_var} not found in .env file or environment")
+
+
+login_with_env_token()
 
 def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
     """
@@ -21,12 +44,9 @@ def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
 
 class Predictor(BasePredictor):
     def setup(self):
-        hf_token = os.environ.get("HF_TOKEN")
-
         self.pipe = DiffusionPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
-            token=hf_token,
-            dtype=torch.bfloat16,
+            torch_dtype=torch.bfloat16,
             device_map="cuda",
             quantization_config=PipelineQuantizationConfig(
                 quant_backend="bitsandbytes_4bit",
@@ -39,7 +59,7 @@ class Predictor(BasePredictor):
             ),
         )
 
-        self.pipeline.transformer.set_attention_backend("flash_hub")
+        self.pipe.transformer.set_attention_backend("flash_hub")
         torch.backends.cudnn.benchmark = True
         torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -51,14 +71,12 @@ class Predictor(BasePredictor):
             "data-is-better-together/open-image-preferences-v1-flux-dev-lora",
             weight_name="pytorch_lora_weights.safetensors",
             adapter_name="open-image-preferences",
-            hotswap=True,
         )
 
         self.pipe.load_lora_weights(
             "aleksa-codes/flux-ghibsky-illustration",
             weight_name="lora_v2.safetensors",
             adapter_name="flux-ghibsky",
-            hotswap=True,
         )
 
         self.current_adapter = "open-image-preferences"
@@ -141,16 +159,16 @@ class Predictor(BasePredictor):
         height: int = Input(description="Image height.", default=1024, ge=512, le=2048),
         width: int = Input(description="Image width.", default=1024, ge=512, le=2048),
         guidance_scale: float = Input(
-            description="Classifier-free guidance scale.",
+            description="Classifier-free guidance scale, higher leads to creative images.",
             default=3.5,
             ge=0,
             le=20,
         ),
         num_inference_steps: int = Input(
             description="Number of denoising steps.",
-            default=28,
+            default=40,
             ge=1,
-            le=150,
+            le=250,
         ),
     ) -> Path:
         # Switch LoRA adapter efficiently (only if needed)

@@ -3,7 +3,8 @@ import time
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-
+from dotenv import load_dotenv
+from huggingface_hub import login
 import requests
 import torch
 import torch.nn as nn
@@ -12,6 +13,27 @@ from PIL import Image
 from torchao.quantization import Int8WeightOnlyConfig, quantize_
 from transformers import AutoModelForImageTextToText, AutoProcessor
 
+
+def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
+    """
+    Load the Hugging Face token from the environment and log in.
+
+    Args:
+        env_var (str): The environment variable name holding the token.
+
+    Raises:
+        ValueError: If the token is not found in the environment.
+    """
+    load_dotenv()  # loads variables from .env file into environment
+    hf_token: str | None = os.getenv(env_var)
+
+    if hf_token:
+        login(token=hf_token)
+    else:
+        raise ValueError(f"{env_var} not found in .env file or environment")
+
+
+login_with_env_token()
 
 # ------------------------
 # Save output utility
