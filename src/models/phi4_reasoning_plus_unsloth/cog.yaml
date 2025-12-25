@@ -10,15 +10,17 @@ build:
 
   run:
     - command: pip install --upgrade pip
-  
+    - command: apt-get update && apt-get install -y git
+    - command: apt-get clean && rm -rf /var/lib/apt/lists/*
+
   # PyTorch 2.9 with CUDA 12.1
     - command: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
   # FlashAttention 2.8.3 prebuilt wheel for cu12 + torch2.9 + cp310
     - command: pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
 
-  
+
   # Runtime dependencies
     - command: pip install transformers accelerate unsloth unsloth_zoo
-  
+
 predict: "predict.py:Predictor"

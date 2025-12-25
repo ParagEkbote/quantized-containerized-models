@@ -45,7 +45,7 @@ login: ## Login to Replicate using Cog
 	$(COG_CMD) login
 
 .PHONY:install-cog
-install-cog: 
+install-cog:
 	sh <(curl -fsSL https://cog.run/install.sh)
 # ----------------------------------------
 # Build

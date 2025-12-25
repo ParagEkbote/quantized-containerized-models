@@ -9,7 +9,7 @@ No vendor lock-in is required.
 Ensure the following are available:
 
 - **Git**
-- **Cog** 
+- **Cog**
 - **Python 3.11+** (only required for `cog predict`)
 
 !!! info

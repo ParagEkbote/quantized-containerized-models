@@ -343,12 +343,12 @@ for prompt in prompts:
         "prompt": prompt,
         "trigger_word": "Photographic"
     }
-    
+
     output = replicate.run(
         "paragekbote/flux-fast-lora-hotswap:...",
         input=input
     )
-    
+
     outputs.append(output)
 
 print(f"Generated {len(outputs)} images")
@@ -378,7 +378,7 @@ if "memory" in analysis.lower():
         "prompt": "Visualization of GPU memory optimization",
         "trigger_word": "Digital art"
     }
-    
+
     image = replicate.run(
         "paragekbote/flux-fast-lora-hotswap:...",
         input=image_input
@@ -422,7 +422,7 @@ The same input structures work across all execution environments without modific
 
     ```python
     import replicate
-    
+
     output = replicate.run(
         "paragekbote/model:version",
         input=input

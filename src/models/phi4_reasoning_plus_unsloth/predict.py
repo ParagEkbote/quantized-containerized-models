@@ -1,6 +1,7 @@
 from unsloth import FastLanguageModel  # noqa  # isort: skip
 from pathlib import Path as SysPath
-from typing import Any, Dict
+from typing import Any
+
 import torch
 from cog import BasePredictor, Input, Path
 
@@ -38,7 +39,7 @@ class Predictor(BasePredictor):
             trust_remote_code=True,
             use_cache=True,
         )
-        
+
         # Ensure pad token is set
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -66,9 +67,9 @@ class Predictor(BasePredictor):
         # ---- MANUAL PHI-4 FORMATTING (bypassing broken chat template) ----
         # Phi-4 uses this format: <|system|>...<|end|><|user|>...<|end|><|assistant|>
         system_msg = "You are Phi, a helpful assistant trained by Microsoft. Answer the user's question directly and clearly."
-        
+
         formatted_prompt = f"<|system|>\n{system_msg}<|end|>\n<|user|>\n{prompt}<|end|>\n<|assistant|>\n"
-        
+
         print(f"[Formatted Prompt]:\n{formatted_prompt}")
         print(f"[User Question]: {prompt}")
 
@@ -86,7 +87,7 @@ class Predictor(BasePredictor):
         # ---- Correct sampling contract ----
         do_sample = temperature > 0.0
 
-        gen_kwargs: Dict[str, Any] = dict(
+        gen_kwargs: dict[str, Any] = dict(
             input_ids=input_ids,
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
@@ -108,12 +109,8 @@ class Predictor(BasePredictor):
 
         # ---- Decode only the NEW tokens (assistant's response) ----
         generated_ids = outputs[0][input_len:]
-        generated_text = self.tokenizer.decode(
-            generated_ids, 
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=True
-        ).strip()
-        
+        generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True).strip()
+
         # Clean up any remaining special tokens
         cleanup_patterns = ["<|end|>", "<|endoftext|>", "<|assistant|>", "<|user|>", "<|system|>"]
         for pattern in cleanup_patterns:
