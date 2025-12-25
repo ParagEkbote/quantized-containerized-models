@@ -9,28 +9,7 @@ import torch
 from cog import BasePredictor, Input
 from diffusers import FluxImg2ImgPipeline
 from diffusers.quantizers import PipelineQuantizationConfig
-from dotenv import load_dotenv
-from huggingface_hub import login
 from PIL import Image
-
-
-def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
-    """
-    Load the Hugging Face token from the environment and log in.
-
-    Args:
-        env_var (str): The environment variable name holding the token.
-
-    Raises:
-        ValueError: If the token is not found in the environment.
-    """
-    load_dotenv()  # loads variables from .env file into environment
-    hf_token: str | None = os.getenv(env_var)
-
-    if hf_token:
-        login(token=hf_token)
-    else:
-        raise ValueError(f"{env_var} not found in .env file or environment")
 
 
 def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
@@ -55,9 +34,12 @@ def load_image(init_image: str) -> Image.Image:
 
 class Predictor(BasePredictor):
     def setup(self):
+        hf_token = os.environ.get("HF_TOKEN")
+
         self.pipe = FluxImg2ImgPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
             dtype=torch.bfloat16,
+            token=hf_token,
             quantization_config=PipelineQuantizationConfig(
                 quant_backend="bitsandbytes_4bit",
                 quant_kwargs={

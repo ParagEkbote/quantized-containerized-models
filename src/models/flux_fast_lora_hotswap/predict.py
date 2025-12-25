@@ -39,6 +39,7 @@ class Predictor(BasePredictor):
             ),
         )
 
+        self.pipeline.transformer.set_attention_backend("flash_hub")
         torch.backends.cudnn.benchmark = True
         torch.backends.cuda.matmul.allow_tf32 = True
 

@@ -8,33 +8,9 @@ import requests
 import torch
 import torch.nn as nn
 from cog import BasePredictor, Input
-from dotenv import load_dotenv
-from huggingface_hub import login
 from PIL import Image
 from torchao.quantization import Int8WeightOnlyConfig, quantize_
 from transformers import AutoModelForImageTextToText, AutoProcessor
-
-
-# ------------------------
-# Hugging Face login
-# ------------------------
-def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
-    """
-    Load the Hugging Face token from the environment and log in.
-
-    Args:
-        env_var (str): The environment variable name holding the token.
-
-    Raises:
-        ValueError: If the token is not found in the environment.
-    """
-    load_dotenv()  # loads variables from .env file into environment
-    hf_token: str | None = os.getenv(env_var)
-
-    if hf_token:
-        login(token=hf_token)
-    else:
-        raise ValueError(f"{env_var} not found in .env file or environment")
 
 
 # ------------------------
@@ -85,6 +61,31 @@ def gemma_filter_fn(module: nn.Module, full_name: str) -> bool:
         "mlp.down_proj",
     ]
     return any(target in name for target in target_layers)
+
+
+def torchao_filter_fn(module: nn.Module, full_name: str) -> bool:
+    """
+    Return True if this module should be quantized.
+    Gemma-3 requires skipping embeddings, lm_head, and norms.
+    """
+    name = full_name.lower()
+
+    if not isinstance(module, nn.Linear):
+        return False
+
+    if any(
+        skip in name
+        for skip in [
+            "embed_tokens",
+            "embedding",
+            "lm_head",
+            "norm",
+            "layernorm",
+        ]
+    ):
+        return False
+
+    return True
 
 
 def magnitude_based_pruning(model, sparsity_ratio=0.5, filter_fn=None):
@@ -264,6 +265,7 @@ def format_chat_messages(prompt: str, image_url: str | None = None):
 # ------------------------
 class Predictor(BasePredictor):
     def setup(self):
+        hf_token = os.environ.get("HF_TOKEN")
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.allow_tf32 = True
@@ -272,6 +274,7 @@ class Predictor(BasePredictor):
         self.processor = AutoProcessor.from_pretrained(MODEL_ID, use_fast=True)
         self.model = AutoModelForImageTextToText.from_pretrained(
             MODEL_ID,
+            token=hf_token,
             dtype=torch.bfloat16,
             device_map="auto",
         )
@@ -285,12 +288,6 @@ class Predictor(BasePredictor):
                 print(f"Warning: Sparsity application failed: {e}")
                 print("Continuing without sparsity...")
 
-        # Compile frequently used layers
-        if hasattr(self.model.language_model, "embed_tokens"):
-            self.model.language_model.embed_tokens = torch.compile(self.model.language_model.embed_tokens)
-        if hasattr(self.model, "lm_head"):
-            self.model.lm_head = torch.compile(self.model.lm_head)
-
     def predict(
         self,
         prompt: str = Input(description="Input text prompt"),
@@ -302,7 +299,7 @@ class Predictor(BasePredictor):
         use_quantization: str = Input(default="true", description="Enable INT8 quantization using torchao"),
         use_sparsity: str = Input(default="false", description="Enable sparsity optimization"),
         sparsity_type: str = Input(default="magnitude", description="Type of sparsity: magnitude, gradual, layer_norm"),
-        sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.8),
+        sparsity_ratio: float = Input(default=0.3, ge=0.0, le=0.4),
     ) -> str:
         torch.manual_seed(seed)
 
@@ -316,7 +313,11 @@ class Predictor(BasePredictor):
         if use_quantization_flag:
             try:
                 sanitize_weights_for_quantization(self.model)
-                quantize_(self.model, Int8WeightOnlyConfig())
+                quantize_(
+                    self.model,
+                    Int8WeightOnlyConfig(),
+                    filter_fn=torchao_filter_fn,
+                )
                 print("Quantization applied successfully")
             except Exception as e:
                 print(f"Warning: Quantization failed: {e}")
@@ -355,6 +356,7 @@ class Predictor(BasePredictor):
                 return_tensors="pt",
             ).to(self.model.device)
 
+        do_sample = temperature > 0.0
         # Generate response
         start = time.time()
         try:
@@ -362,8 +364,8 @@ class Predictor(BasePredictor):
                 outputs = self.model.generate(
                     **inputs,
                     max_new_tokens=max_new_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
+                    temperature=temperature if do_sample else None,
+                    top_p=top_p if do_sample else None,
                     do_sample=True,
                     eos_token_id=self.processor.tokenizer.eos_token_id,
                     pad_token_id=self.processor.tokenizer.pad_token_id,
