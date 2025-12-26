@@ -74,6 +74,7 @@ gemma-torchao = [
 dev = [
     "pre-commit",
     "ty==0.0.1a20",
+    "modal",
     "ruff>0.14.0"
 ]
 
