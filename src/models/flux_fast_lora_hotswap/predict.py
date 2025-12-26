@@ -1,14 +1,15 @@
 import os
+import tempfile
 import uuid
 from pathlib import Path
-from dotenv import load_dotenv
-from huggingface_hub import login
+
 import torch
 from cog import BasePredictor, Input
 from diffusers import DiffusionPipeline
 from diffusers.quantizers import PipelineQuantizationConfig
+from dotenv import load_dotenv
+from huggingface_hub import login
 from PIL import Image
-
 
 
 def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
@@ -30,9 +31,7 @@ def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
         raise ValueError(f"{env_var} not found in .env file or environment")
 
 
-login_with_env_token()
-
-def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
+def save_image(image: Image.Image, output_dir: Path) -> Path:
     """
     Function to save the generated image.
     """
@@ -44,6 +43,7 @@ def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
 
 class Predictor(BasePredictor):
     def setup(self):
+        login_with_env_token()
         self.pipe = DiffusionPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
             torch_dtype=torch.bfloat16,
@@ -194,4 +194,5 @@ class Predictor(BasePredictor):
         print(f"[Adapter]: {self.current_adapter}")
         print(f"[VRAM Used]: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
 
-        return save_image(image)
+        tmpdir = Path(tempfile.mkdtemp(prefix="flux_img2img_"))
+        return save_image(image, tmpdir)

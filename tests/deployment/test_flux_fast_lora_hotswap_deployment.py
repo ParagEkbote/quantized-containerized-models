@@ -50,8 +50,8 @@ def wait_for_server(url="http://localhost:5000/ping", timeout=60):
 def test_flux_fast_lora_hotswap_container_builds():
     result = subprocess.run(
         ["cog", "build", "-t", "flux-fast-lora-hotswap-test"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
 
@@ -67,8 +67,8 @@ def test_flux_fast_lora_hotswap_container_builds():
 def test_flux_fast_lora_hotswap_server_boots():
     proc = subprocess.Popen(
         ["cog", "serve"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
 

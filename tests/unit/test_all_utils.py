@@ -1,13 +1,17 @@
+import os
+
 import pytest
 import torch
 import torch.nn as nn
 from PIL import Image
 
 from models.flux_fast_lora_hotswap.predict import (
+    login_with_env_token,
     save_image,
 )
 from models.flux_fast_lora_hotswap_img2img.predict import (
     load_image,
+    login_with_env_token,
     save_image,
 )
 from models.gemma_torchao.predict import (
@@ -16,9 +20,13 @@ from models.gemma_torchao.predict import (
     gemma_filter_fn,
     gradual_magnitude_pruning,
     layer_norm_pruning,
+    login_with_env_token,
     magnitude_based_pruning,
     sanitize_weights_for_quantization,
     save_output_to_file,
+)
+from models.phi4_reasoning_plus_unsloth.predict import (
+    save_text,
 )
 from models.smollm3_pruna.predict import (
     save_text,
@@ -38,6 +46,17 @@ class TinyLinearModel(nn.Module):
 
     def forward(self, x):
         return self.fc2(torch.relu(self.fc1(x)))
+
+
+# =======================================================
+# 1. login_with_env_token
+# =======================================================
+@pytest.mark.unit
+def test_login_with_env_token_missing_env():
+    if "HF_TOKEN" in os.environ:
+        del os.environ["HF_TOKEN"]
+    with pytest.raises(ValueError):
+        login_with_env_token()
 
 
 # =======================================================

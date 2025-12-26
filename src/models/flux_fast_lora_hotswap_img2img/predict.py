@@ -1,4 +1,5 @@
 import os
+import tempfile
 import time
 import uuid
 from io import BytesIO
@@ -9,10 +10,31 @@ import torch
 from cog import BasePredictor, Input
 from diffusers import FluxImg2ImgPipeline
 from diffusers.quantizers import PipelineQuantizationConfig
+from dotenv import load_dotenv
+from huggingface_hub import login
 from PIL import Image
 
 
-def save_image(image: Image.Image, output_dir: Path = Path("/tmp")) -> Path:
+def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
+    """
+    Load the Hugging Face token from the environment and log in.
+
+    Args:
+        env_var (str): The environment variable name holding the token.
+
+    Raises:
+        ValueError: If the token is not found in the environment.
+    """
+    load_dotenv()  # loads variables from .env file into environment
+    hf_token: str | None = os.getenv(env_var)
+
+    if hf_token:
+        login(token=hf_token)
+    else:
+        raise ValueError(f"{env_var} not found in .env file or environment")
+
+
+def save_image(image: Image.Image, output_dir: Path) -> Path:
     """
     Function to save the generated image.
     """
@@ -135,4 +157,5 @@ class Predictor(BasePredictor):
         print(f"[Prompt]: {prompt} | [Trigger Word]: {trigger_word}")
         print(f"VRAM used: {torch.cuda.memory_allocated() / 1e9:.2f} GB | Time: {elapsed:.2f}s")
 
-        return save_image(output)
+        tmpdir = Path(tempfile.mkdtemp(prefix="flux_img2img_"))
+        return save_image(output, tmpdir)

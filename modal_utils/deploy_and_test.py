@@ -37,8 +37,8 @@ def deploy_and_test(model_name: str):
         proc = subprocess.run(
             cmd,
             cwd=model_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
+            check=False,
             text=True,
         )
 

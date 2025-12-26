@@ -50,8 +50,8 @@ def wait_for_server(url="http://localhost:5000/ping", timeout=60):
 def test_flux_fast_lora_hotswap_img2img_container_builds():
     result = subprocess.run(
         ["cog", "build", "-t", "flux-fast-lora-hotswap-img2img-test"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
     assert result.returncode == 0, f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -66,8 +66,8 @@ def test_flux_fast_lora_hotswap_img2img_container_builds():
 def test_flux_fast_lora_hotswap_img2img_server_boots():
     proc = subprocess.Popen(
         ["cog", "serve"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
     try:

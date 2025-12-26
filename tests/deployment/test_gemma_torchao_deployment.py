@@ -54,8 +54,8 @@ def test_gemma_torchao_container_builds() -> None:
     """Ensure `cog build` for gemma-torchao succeeds without errors."""
     result = subprocess.run(
         ["cog", "build", "-t", "gemma-torchao-test"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
 
@@ -72,8 +72,8 @@ def test_gemma_torchao_server_boots() -> None:
     """Ensure `cog serve` boots and responds to /ping."""
     proc = subprocess.Popen(
         ["cog", "serve"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
 
@@ -100,8 +100,8 @@ def test_gemma_torchao_missing_fields() -> None:
     """
     proc = subprocess.Popen(
         ["cog", "serve"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
 
@@ -136,8 +136,8 @@ def test_gemma_torchao_full_prediction(tmp_path: Path) -> None:
     """
     proc = subprocess.Popen(
         ["cog", "serve"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
 

@@ -1,4 +1,5 @@
 from unsloth import FastLanguageModel  # noqa  # isort: skip
+import tempfile
 from pathlib import Path as SysPath
 from typing import Any
 
@@ -118,5 +119,6 @@ class Predictor(BasePredictor):
 
         print(f"[Assistant Response]: {generated_text[:500]}")
 
-        output_path = save_text(SysPath("/tmp"), seed, "pred", generated_text)
-        return Path(str(output_path))
+        tmpdir = Path(tempfile.mkdtemp(prefix="phi4_"))
+        output_path = save_text(tmpdir, seed, "pred", generated_text)
+        return output_path

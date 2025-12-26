@@ -54,8 +54,8 @@ def test_smollm3_container_builds():
 
     result = subprocess.run(
         ["cog", "build", "-t", "smollm3-test"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
 
@@ -73,8 +73,8 @@ def test_smollm3_server_boots():
 
     proc = subprocess.Popen(
         ["cog", "serve"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        check=False,
         text=True,
     )
 

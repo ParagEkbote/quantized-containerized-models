@@ -3,12 +3,13 @@ import time
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from dotenv import load_dotenv
-from huggingface_hub import login
+
 import requests
 import torch
 import torch.nn as nn
 from cog import BasePredictor, Input
+from dotenv import load_dotenv
+from huggingface_hub import login
 from PIL import Image
 from torchao.quantization import Int8WeightOnlyConfig, quantize_
 from transformers import AutoModelForImageTextToText, AutoProcessor
@@ -32,8 +33,6 @@ def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
     else:
         raise ValueError(f"{env_var} not found in .env file or environment")
 
-
-login_with_env_token()
 
 # ------------------------
 # Save output utility
@@ -287,6 +286,7 @@ def format_chat_messages(prompt: str, image_url: str | None = None):
 # ------------------------
 class Predictor(BasePredictor):
     def setup(self):
+        login_with_env_token()
         hf_token = os.environ.get("HF_TOKEN")
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True

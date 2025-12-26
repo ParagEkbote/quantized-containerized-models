@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------
 
 
+def normalize_output(text: str) -> str:
+    return text.strip()
+
+
 def clean_input(payload: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in payload.items() if v is not None}
 
