@@ -1,8 +1,6 @@
-# utils.py
-
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Iterable, Callable
 from typing import Any
 
 import replicate
@@ -18,18 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------
-# Input helpers
-# -----------------------------------------------------
-
-def normalize_output(text: str) -> str:
-    return text.strip()
-
-
-def clean_input(payload: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in payload.items() if v is not None}
-
-
-# -----------------------------------------------------
 # Exceptions
 # -----------------------------------------------------
 
@@ -38,14 +24,37 @@ class InferenceTimeoutError(RuntimeError):
 
 
 class InvalidModelOutputError(RuntimeError):
-    """Model output was invalid or unexpected."""
+    """Unexpected or invalid model output."""
 
 
 # -----------------------------------------------------
-# Core execution (single attempt)
+# Helpers
 # -----------------------------------------------------
 
-def _run_once(
+def clean_input(payload: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def normalize_string_bools(payload: dict[str, Any], keys: Iterable[str]) -> dict[str, Any]:
+    """
+    Convert boolean-like inputs to lowercase strings for Cog schema compatibility.
+    """
+    out = dict(payload)
+    for k in keys:
+        if k in out:
+            v = out[k]
+            if isinstance(v, bool):
+                out[k] = "true" if v else "false"
+            else:
+                out[k] = str(v).lower()
+    return out
+
+
+# -----------------------------------------------------
+# Text execution
+# -----------------------------------------------------
+
+def _run_text_once(
     deployment_id: str,
     payload: dict[str, Any],
     timeout_s: float,
@@ -69,7 +78,7 @@ def _run_once(
             f"Expected text output, got {type(raw)}"
         )
 
-    text = normalize_output(raw)
+    text = raw.strip()
 
     if len(text) < min_chars:
         raise InvalidModelOutputError(
@@ -81,10 +90,6 @@ def _run_once(
 
     return text, elapsed
 
-
-# -----------------------------------------------------
-# Tenacity-wrapped execution
-# -----------------------------------------------------
 
 @retry(
     retry=retry_if_exception_type(
@@ -104,16 +109,72 @@ def run_and_time(
     validator: Callable[[str], None] | None = None,
 ) -> tuple[str, float]:
     """
-    Run a Replicate deployment with retries.
-
-    Suitable for:
-    - text models
-    - multimodal models that return text
+    Run a text or multimodal-text Replicate deployment with retries.
     """
-    return _run_once(
+    return _run_text_once(
         deployment_id,
         payload,
         timeout_s,
         min_chars=min_chars,
         validator=validator,
     )
+
+
+# -----------------------------------------------------
+# Image execution
+# -----------------------------------------------------
+
+def _run_image_once(
+    deployment_id: str,
+    payload: dict[str, Any],
+    timeout_s: float,
+) -> tuple[str, float]:
+    cleaned = clean_input(payload)
+
+    start = time.time()
+    raw = replicate.run(deployment_id, input=cleaned)
+    elapsed = time.time() - start
+
+    if elapsed > timeout_s:
+        raise InferenceTimeoutError(
+            f"Inference exceeded time budget: {elapsed:.2f}s"
+        )
+
+    # Accept common Replicate image formats
+    if isinstance(raw, list):
+        if not raw:
+            raise InvalidModelOutputError("Empty image output list")
+        raw = raw[0]
+
+    if not isinstance(raw, str):
+        raise InvalidModelOutputError(
+            f"Expected image URL string, got {type(raw)}"
+        )
+
+    if not (raw.startswith("http") or raw.endswith(".png")):
+        raise InvalidModelOutputError(
+            f"Unexpected image output: {raw}"
+        )
+
+    return raw, elapsed
+
+
+@retry(
+    retry=retry_if_exception_type(
+        (InferenceTimeoutError, replicate.exceptions.ReplicateError)
+    ),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=5, max=40),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+def run_image_and_time(
+    deployment_id: str,
+    payload: dict[str, Any],
+    *,
+    timeout_s: float = 180.0,
+) -> tuple[str, float]:
+    """
+    Run an image-producing Replicate deployment with retries.
+    """
+    return _run_image_once(deployment_id, payload, timeout_s)

@@ -16,7 +16,9 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "r8.im/paragekbote/gemma3-torchao-quant-sparse"
-STABLE_GEMMA_TORCHAO_MODEL_ID = os.environ.get("STABLE_GEMMA_TORCHAO_MODEL_ID")
+STABLE_GEMMA_TORCHAO_MODEL_ID = os.environ.get(
+    "STABLE_GEMMA_TORCHAO_MODEL_ID"
+)
 
 MIN_OUTPUT_CHARS = 120
 MIN_LENGTH_RATIO = 0.4
@@ -27,23 +29,34 @@ CANARY_CASES: List[Dict] = [
     {
         "name": "text_only_reasoning",
         "input": {
-            "prompt": "Explain why gradient clipping can stabilize training in deep neural networks.",
+            "prompt": (
+                "Explain why gradient clipping can stabilize training "
+                "in deep neural networks."
+            ),
             "temperature": 0.0,
-            "use_quantization": "true",
-            "use_sparsity": "false",
+            "use_quantization": True,
+            "use_sparsity": False,
             "seed": 42,
         },
+        "is_multimodal": False,
     },
     {
         "name": "image_conditioned_reasoning",
         "input": {
-            "prompt": "Describe the scene and explain what the image suggests about the environment.",
-            "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/512px-Fronalpstock_big.jpg",
+            "prompt": (
+                "Describe the scene and explain what the image suggests "
+                "about the environment."
+            ),
+            "image_url": (
+                "https://upload.wikimedia.org/wikipedia/commons/thumb/"
+                "3/3f/Fronalpstock_big.jpg/512px-Fronalpstock_big.jpg"
+            ),
             "temperature": 0.0,
-            "use_quantization": "true",
-            "use_sparsity": "false",
+            "use_quantization": True,
+            "use_sparsity": False,
             "seed": 42,
         },
+        "is_multimodal": True,
     },
 ]
 
@@ -61,8 +74,7 @@ def get_latest_model_id() -> str:
 
 def normalize_text(text: str) -> str:
     text = " ".join(text.strip().split())
-    # Remove common Gemma artifacts
-    for tok in ["<bos>", "<eos>", "<image>"]:
+    for tok in ("<bos>", "<eos>", "<image>"):
         text = text.replace(tok, "")
     return text.strip()
 
@@ -73,14 +85,14 @@ def repetition_ratio(text: str) -> float:
         return 1.0
     return len(set(tokens)) / len(tokens)
 
+
 def multimodal_text_validator(text: str) -> None:
     """
-    Validator for multimodal text outputs.
-    Ensures the vision path actually contributed.
+    Validator for multimodal outputs.
+    Ensures the vision pathway actually contributed.
     """
     lowered = text.lower()
 
-    # Very loose but effective signals
     vision_tokens = [
         "image",
         "scene",
@@ -92,7 +104,6 @@ def multimodal_text_validator(text: str) -> None:
     ]
 
     if len(text) < 200:
-        # Short outputs must explicitly reference visual content
         assert any(tok in lowered for tok in vision_tokens), (
             "Multimodal output does not reference visual content"
         )
@@ -105,7 +116,11 @@ def multimodal_text_validator(text: str) -> None:
 @pytest.mark.canary
 def test_canary_gemma_torchao():
     """
-    Canary release test for Gemma-3 with torchao INT8 quantization.
+    Canary release test for Gemma-3 VLM with torchao quantization.
+    Guards against:
+      - semantic drift
+      - multimodal collapse
+      - quantization degeneration
     """
 
     if not STABLE_GEMMA_TORCHAO_MODEL_ID:
@@ -119,22 +134,30 @@ def test_canary_gemma_torchao():
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
     for case in CANARY_CASES:
+        timeout = 120.0 if case["is_multimodal"] else 90.0
+        validator = (
+            multimodal_text_validator
+            if case["is_multimodal"]
+            else None
+        )
+
         old_text, _ = run_and_time(
             STABLE_GEMMA_TORCHAO_MODEL_ID,
             case["input"],
-            timeout_s=120.0 if "image_url" in case["input"] else 90.0,
+            timeout_s=timeout,
             min_chars=MIN_OUTPUT_CHARS,
-            validator=multimodal_text_validator if "image_url" in case["input"] else None,
-    )
+            output_type="vlm",
+            validator=validator,
+        )
 
         new_text, _ = run_and_time(
             candidate_id,
             case["input"],
-            timeout_s=120.0 if "image_url" in case["input"] else 90.0,
+            timeout_s=timeout,
             min_chars=MIN_OUTPUT_CHARS,
-            validator=multimodal_text_validator if "image_url" in case["input"] else None,
-    )
-
+            output_type="vlm",
+            validator=validator,
+        )
 
         old_text = normalize_text(old_text)
         new_text = normalize_text(new_text)
@@ -165,8 +188,12 @@ def test_canary_gemma_torchao():
         # --------------------------------------------------
         # Semantic similarity (primary signal)
         # --------------------------------------------------
-        old_emb = embedder.encode(old_text, normalize_embeddings=True)
-        new_emb = embedder.encode(new_text, normalize_embeddings=True)
+        old_emb = embedder.encode(
+            old_text, normalize_embeddings=True
+        )
+        new_emb = embedder.encode(
+            new_text, normalize_embeddings=True
+        )
 
         similarity = float(np.dot(old_emb, new_emb))
         assert similarity >= MIN_SEMANTIC_SIMILARITY, (
