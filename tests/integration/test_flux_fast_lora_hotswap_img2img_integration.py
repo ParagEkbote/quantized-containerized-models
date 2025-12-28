@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from integration.utils import  run_image_and_time
+from integration.utils import run_image_and_time
 
 # -----------------------------------------------------
 # Logging configuration

@@ -1,30 +1,27 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List
 
+import clip
+import imagehash
 import numpy as np
 import pytest
 import replicate
-import imagehash
 import torch
-import clip
 from PIL import Image
-
 from utils import run_image_and_time
-
 
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "r8.im/paragekbote/flux-fast-lora-hotswap-img2img"
-STABLE_FLUX_IMG2IMG_MODEL_ID= os.environ.get("STABLE_FLUX_IMG2IMG_MODEL_ID")
+STABLE_FLUX_IMG2IMG_MODEL_ID = os.environ.get("STABLE_FLUX_IMG2IMG_MODEL_ID")
 
 PHASH_MAX_DISTANCE = 16
 CLIP_MIN_SIMILARITY = 0.90
 
-CANARY_CASES: List[Dict] = [
+CANARY_CASES: list[dict] = [
     {
         "name": "open_image_preferences_lora",
         "input": {
@@ -49,6 +46,7 @@ CANARY_CASES: List[Dict] = [
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
+
 
 def get_latest_model_id() -> str:
     model = replicate.models.get(MODEL_BASE)
@@ -86,6 +84,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 # Canary test
 # ---------------------------------------------------------------------
 
+
 @pytest.mark.canary
 def test_canary_release():
     if not STABLE_FLUX_IMG2IMG_MODEL_ID:
@@ -107,15 +106,11 @@ def test_canary_release():
 
         # Structural regression
         p_dist = imagehash.phash(old_img) - imagehash.phash(new_img)
-        assert p_dist <= PHASH_MAX_DISTANCE, (
-            f"{case['name']} pHash drift too high: {p_dist}"
-        )
+        assert p_dist <= PHASH_MAX_DISTANCE, f"{case['name']} pHash drift too high: {p_dist}"
 
         # Semantic regression
         sim = cosine_similarity(
             clipper.embed(old_img),
             clipper.embed(new_img),
         )
-        assert sim >= CLIP_MIN_SIMILARITY, (
-            f"{case['name']} CLIP similarity too low: {sim:.4f}"
-        )
+        assert sim >= CLIP_MIN_SIMILARITY, f"{case['name']} CLIP similarity too low: {sim:.4f}"

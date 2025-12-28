@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List
 
 import numpy as np
 import pytest
 import replicate
 from sentence_transformers import SentenceTransformer
-
 from utils import run_and_time
-
 
 # ---------------------------------------------------------------------
 # Configuration
@@ -23,7 +20,7 @@ MIN_LENGTH_RATIO = 0.4
 MAX_LENGTH_RATIO = 3.0
 MIN_SEMANTIC_SIMILARITY = 0.82
 
-CANARY_CASES: List[Dict] = [
+CANARY_CASES: list[dict] = [
     {
         "name": "text_only_reasoning",
         "input": {
@@ -52,6 +49,7 @@ CANARY_CASES: List[Dict] = [
 # Helpers
 # ---------------------------------------------------------------------
 
+
 def get_latest_model_id() -> str:
     model = replicate.models.get(MODEL_BASE)
     versions = list(model.versions.list())
@@ -77,6 +75,7 @@ def repetition_ratio(text: str) -> float:
 # ---------------------------------------------------------------------
 # Canary test
 # ---------------------------------------------------------------------
+
 
 @pytest.mark.canary
 def test_canary_gemma_torchao():
@@ -104,25 +103,19 @@ def test_canary_gemma_torchao():
         # --------------------------------------------------
         # Hard blockers
         # --------------------------------------------------
-        assert len(new_text) >= MIN_OUTPUT_CHARS, (
-            f"{case['name']} output too short"
-        )
+        assert len(new_text) >= MIN_OUTPUT_CHARS, f"{case['name']} output too short"
 
         # --------------------------------------------------
         # Length sanity
         # --------------------------------------------------
         ratio = len(new_text) / max(len(old_text), 1)
-        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, (
-            f"{case['name']} length ratio abnormal: {ratio:.2f}"
-        )
+        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, f"{case['name']} length ratio abnormal: {ratio:.2f}"
 
         # --------------------------------------------------
         # Degeneration guard (quantization-specific)
         # --------------------------------------------------
         rep = repetition_ratio(new_text)
-        assert rep > 0.35, (
-            f"{case['name']} excessive repetition detected: {rep:.2f}"
-        )
+        assert rep > 0.35, f"{case['name']} excessive repetition detected: {rep:.2f}"
 
         # --------------------------------------------------
         # Semantic similarity (primary signal)
@@ -131,6 +124,4 @@ def test_canary_gemma_torchao():
         new_emb = embedder.encode(new_text, normalize_embeddings=True)
 
         similarity = float(np.dot(old_emb, new_emb))
-        assert similarity >= MIN_SEMANTIC_SIMILARITY, (
-            f"{case['name']} semantic drift too high: {similarity:.3f}"
-        )
+        assert similarity >= MIN_SEMANTIC_SIMILARITY, f"{case['name']} semantic drift too high: {similarity:.3f}"

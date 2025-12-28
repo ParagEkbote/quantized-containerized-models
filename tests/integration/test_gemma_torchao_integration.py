@@ -17,10 +17,7 @@ logger.setLevel(logging.INFO)
 # -----------------------------------------------------
 # Deployment ID (PINNED)
 # -----------------------------------------------------
-DEPLOYMENT_ID = (
-    "paragekbote/gemma3-torchao-quant-sparse:"
-    "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
-)
+DEPLOYMENT_ID = "paragekbote/gemma3-torchao-quant-sparse:44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
 
 # -----------------------------------------------------
 # Base input

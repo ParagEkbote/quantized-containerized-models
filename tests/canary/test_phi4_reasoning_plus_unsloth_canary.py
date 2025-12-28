@@ -1,29 +1,26 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List
 
 import numpy as np
 import pytest
 import replicate
 from sentence_transformers import SentenceTransformer
-
 from utils import run_and_time
-
 
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "r8.im/paragekbote/phi-4-reasoning-plus-unsloth"
-STABLE_PHI4_MODEL_ID= os.environ.get("STABLE_PHI4_MODEL_ID")
+STABLE_PHI4_MODEL_ID = os.environ.get("STABLE_PHI4_MODEL_ID")
 
 MIN_OUTPUT_CHARS = 120
 MAX_LENGTH_RATIO = 2.5
 MIN_LENGTH_RATIO = 0.4
 MIN_SEMANTIC_SIMILARITY = 0.85
 
-CANARY_CASES: List[Dict] = [
+CANARY_CASES: list[dict] = [
     {
         "name": "math_reasoning",
         "input": {
@@ -47,6 +44,7 @@ CANARY_CASES: List[Dict] = [
 # Helpers
 # ---------------------------------------------------------------------
 
+
 def get_latest_model_id() -> str:
     model = replicate.models.get(MODEL_BASE)
     versions = list(model.versions.list())
@@ -61,6 +59,7 @@ def normalize_text(text: str) -> str:
 # ---------------------------------------------------------------------
 # Canary Test
 # ---------------------------------------------------------------------
+
 
 @pytest.mark.canary
 def test_canary_phi4_reasoning():
@@ -89,17 +88,13 @@ def test_canary_phi4_reasoning():
         # --------------------------------------------------
         # Hard blockers
         # --------------------------------------------------
-        assert len(new_text) >= MIN_OUTPUT_CHARS, (
-            f"{case['name']} output too short"
-        )
+        assert len(new_text) >= MIN_OUTPUT_CHARS, f"{case['name']} output too short"
 
         # --------------------------------------------------
         # Length sanity
         # --------------------------------------------------
         ratio = len(new_text) / max(len(old_text), 1)
-        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, (
-            f"{case['name']} length ratio abnormal: {ratio:.2f}"
-        )
+        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, f"{case['name']} length ratio abnormal: {ratio:.2f}"
 
         # --------------------------------------------------
         # Semantic similarity (core signal)
@@ -108,6 +103,4 @@ def test_canary_phi4_reasoning():
         new_emb = embedder.encode(new_text, normalize_embeddings=True)
 
         similarity = float(np.dot(old_emb, new_emb))
-        assert similarity >= MIN_SEMANTIC_SIMILARITY, (
-            f"{case['name']} semantic drift too high: {similarity:.3f}"
-        )
+        assert similarity >= MIN_SEMANTIC_SIMILARITY, f"{case['name']} semantic drift too high: {similarity:.3f}"
