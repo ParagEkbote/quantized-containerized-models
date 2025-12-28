@@ -17,7 +17,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-
 def benchmark_gemma3_vlm(num_runs: int = 3):
     deployment_id = (
         "paragekbote/gemma3-torchao-quant-sparse:"
@@ -27,88 +26,99 @@ def benchmark_gemma3_vlm(num_runs: int = 3):
     out_dir = os.getenv("BENCHMARK_OUTPUT_DIR", ".")
     os.makedirs(out_dir, exist_ok=True)
 
+    # --------------------------------------------------
+    # Multimodal inputs (image + text → text)
+    # --------------------------------------------------
     input_params = {
         "prompt": "Describe the image in the photo.",
-        "image_url": "https://images.pexels.com/photos/29380151/pexels-photo-29380151.jpeg",
-        "use_sparsity": "true",
-        "sparsity_type": "layer_norm",
+        "image_url": (
+            "https://images.pexels.com/photos/29380151/"
+            "pexels-photo-29380151.jpeg"
+        ),
+
+        # Model controls
         "max_new_tokens": 500,
         "temperature": 0.7,
         "top_p": 0.9,
         "seed": 42,
-        "use_quantization": "true",
+
+        # Optimization flags (typed correctly)
+        "use_quantization": True,
+        "use_sparsity": True,
+        "sparsity_type": "layer_norm",
         "sparsity_ratio": 0.3,
     }
 
-    logger.info("Running Gemma 3 VLM Benchmark")
+    logger.info("Running Gemma-3 VLM benchmark")
     logger.info(json.dumps(input_params, indent=2))
 
     results = {
         "deployment_id": deployment_id,
+        "model_type": "vlm",
+        "modality": "image+text → text",
         "timestamp": datetime.now().astimezone().isoformat(),
         "input_params": input_params,
         "runs": [],
     }
 
     # --------------------------------------------------
-    # Execute runs (canonical record)
+    # Execute runs
     # --------------------------------------------------
     for i in range(1, num_runs + 1):
-        logger.info(f"--- Run {i}/{num_runs} ---")
+        logger.info("--- Run %d/%d ---", i, num_runs)
 
         try:
             start = time.time()
             raw_output = safe_replicate_run(deployment_id, input_params)
-            output = normalize_output(raw_output)
+            text = normalize_output(raw_output, output_type="vlm")
             elapsed = time.time() - start
 
-            if isinstance(output, bytes):
-                text = None
-                output_chars = len(output)
-                output_words = None
-            else:
-                text = str(output)
-                output_chars = len(text)
-                output_words = len(text.split())
+            if not isinstance(text, str):
+                raise TypeError(
+                    f"normalize_output returned {type(text)}, expected str"
+                )
 
-            out_path = os.path.join(out_dir, f"gemma3_vlm_output_run_{i}.txt")
+            output_chars = len(text)
+            output_words = len(text.split())
 
-            if text is None:
-                with open(out_path, "wb") as f:
-                    f.write(output)
-            else:
-                with open(out_path, "w", encoding="utf-8") as f:
-                    f.write(text)
+            out_path = os.path.join(
+                out_dir, f"gemma3_vlm_output_run_{i}.txt"
+            )
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(text)
 
-            results["runs"].append({
-                "run_number": i,
-                "elapsed_time": elapsed,
-                "output_chars": output_chars,
-                "output_words": output_words,
-                "output_file": out_path,
-                "status": "success",
-            })
+            results["runs"].append(
+                {
+                    "run_number": i,
+                    "elapsed_time": elapsed,
+                    "output_chars": output_chars,
+                    "output_words": output_words,
+                    "output_file": out_path,
+                    "status": "success",
+                }
+            )
 
-            logger.info(f"Run {i} succeeded in {elapsed:.3f}s")
+            logger.info("Run %d succeeded in %.3fs", i, elapsed)
 
         except Exception as e:
             logger.exception("Run failed")
-            results["runs"].append({
-                "run_number": i,
-                "status": "failed",
-                "error": str(e),
-            })
+            results["runs"].append(
+                {
+                    "run_number": i,
+                    "status": "failed",
+                    "error": str(e),
+                }
+            )
 
     # --------------------------------------------------
-    # Statistics derived FROM runs
+    # Statistics
     # --------------------------------------------------
     successful_runs = [
-        r for r in results["runs"]
-        if r.get("status") == "success"
+        r for r in results["runs"] if r["status"] == "success"
     ]
 
     times = [r["elapsed_time"] for r in successful_runs]
-    word_runs = [r for r in successful_runs if r.get("output_words") is not None]
+    word_runs = [r for r in successful_runs if r["output_words"] is not None]
 
     if times:
         avg = sum(times) / len(times)
@@ -122,7 +132,7 @@ def benchmark_gemma3_vlm(num_runs: int = 3):
             if word_runs else 0
         )
 
-        tps = avg_words / avg if avg else 0
+        words_per_sec = avg_words / avg if avg else 0
 
         cold_run = successful_runs[0]
         warm_runs = successful_runs[1:]
@@ -130,8 +140,6 @@ def benchmark_gemma3_vlm(num_runs: int = 3):
             sum(r["elapsed_time"] for r in warm_runs) / len(warm_runs)
             if warm_runs else None
         )
-
-        consistency = max(0, min(100, 100 - (cv or 0)))
 
         results["statistics"] = {
             "successful_runs": len(successful_runs),
@@ -144,7 +152,7 @@ def benchmark_gemma3_vlm(num_runs: int = 3):
             "time_variability_cv": cv,
 
             "avg_words": avg_words,
-            "avg_tokens_per_sec": tps,
+            "avg_words_per_sec": words_per_sec,
 
             "cold_start": {
                 "run_number": cold_run["run_number"],
@@ -157,14 +165,15 @@ def benchmark_gemma3_vlm(num_runs: int = 3):
                 cold_run["elapsed_time"] / warm_avg
                 if warm_avg else None
             ),
-            "consistency_score": consistency,
         }
 
-    out_json = os.path.join(out_dir, "gemma3_vlm_benchmark_results.json")
+    out_json = os.path.join(
+        out_dir, "gemma3_vlm_benchmark_results.json"
+    )
     with open(out_json, "w") as f:
         json.dump(results, f, indent=2)
 
-    logger.info(f"Saved → {out_json}")
+    logger.info("Saved → %s", out_json)
     return results
 
 

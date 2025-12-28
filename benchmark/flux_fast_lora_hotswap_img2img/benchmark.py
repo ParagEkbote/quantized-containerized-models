@@ -9,14 +9,14 @@ from benchmark.utils import safe_replicate_run, normalize_output
 logging.basicConfig(
     level=logging.INFO,
     handlers=[
-        logging.FileHandler("benchmark_flux_text2img.log"),
+        logging.FileHandler("benchmark_flux_img2img.log"),
         logging.StreamHandler(),
     ],
 )
 logger = logging.getLogger(__name__)
 
 
-def benchmark_flux_text2img(num_runs: int = 3):
+def benchmark_flux_img2img(num_runs: int = 3):
     deployment_id = (
         "paragekbote/flux-fast-lora-hotswap-img2img:"
         "e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
@@ -25,17 +25,36 @@ def benchmark_flux_text2img(num_runs: int = 3):
     out_dir = os.getenv("BENCHMARK_OUTPUT_DIR", ".")
     os.makedirs(out_dir, exist_ok=True)
 
+    # --------------------------------------------------
+    # Canonical img2img benchmark inputs (schema-aligned)
+    # --------------------------------------------------
     input_params = {
-            "seed": 47,
-            "prompt": "A majestic peacock with enhanced detail, vibrant iridescent feathers, sharp eye-spots, natural lighting, and improved clarity and depth.",
-            "strength": 0.75,
-            "init_image": "https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg",
-            "trigger_word": "Manga",
-            "guidance_scale": 6.0,
-            "num_inference_steps": 20
+        # Determinism
+        "seed": 47,
+
+        # img2img inputs
+        "init_image": (
+            "https://images.pexels.com/photos/4934914/"
+            "pexels-photo-4934914.jpeg"
+        ),
+        "strength": 0.75,
+
+        # Text + LoRA routing
+        "prompt": (
+            "A majestic peacock with enhanced detail, vibrant iridescent feathers, "
+            "sharp eye-spots, natural lighting, and improved clarity and depth."
+        ),
+        "trigger_word": "Manga",
+
+        # Diffusion controls (latency-critical)
+        "guidance_scale": 6.0,
+        "num_inference_steps": 20,
+
+        # Explicitly exercise LoRA hotswapping
+        "hotswap": True,
     }
 
-    logger.info("Running Flux Text2Img")
+    logger.info("Running Flux Img2Img benchmark")
     logger.info(json.dumps(input_params, indent=2))
 
     results = {
@@ -49,41 +68,51 @@ def benchmark_flux_text2img(num_runs: int = 3):
     # Execute runs (single source of truth)
     # --------------------------------------------------
     for i in range(1, num_runs + 1):
-        logger.info(f"--- Run {i}/{num_runs} ---")
+        logger.info("--- Run %d/%d ---", i, num_runs)
 
         try:
             start = time.time()
+
             raw_out = safe_replicate_run(deployment_id, input_params)
-            output = normalize_output(raw_out)
+            output = normalize_output(raw_out, output_type="image")
+
             elapsed = time.time() - start
 
-            out_path = os.path.join(out_dir, f"flux_text2img_run_{i}.png")
+            if not isinstance(output, (bytes, bytearray)):
+                raise TypeError(
+                    f"normalize_output returned {type(output)}, expected bytes"
+                )
+
+            out_path = os.path.join(out_dir, f"flux_img2img_run_{i}.png")
             with open(out_path, "wb") as f:
                 f.write(output)
 
-            results["runs"].append({
-                "run_number": i,
-                "elapsed_time": elapsed,
-                "output_file": out_path,
-                "status": "success",
-            })
+            results["runs"].append(
+                {
+                    "run_number": i,
+                    "elapsed_time": elapsed,
+                    "output_file": out_path,
+                    "status": "success",
+                }
+            )
 
-            logger.info(f"Run {i} succeeded in {elapsed:.3f}s")
+            logger.info("Run %d succeeded in %.3fs", i, elapsed)
 
         except Exception as e:
             logger.exception("Run failed")
-            results["runs"].append({
-                "run_number": i,
-                "status": "failed",
-                "error": str(e),
-            })
+            results["runs"].append(
+                {
+                    "run_number": i,
+                    "status": "failed",
+                    "error": str(e),
+                }
+            )
 
     # --------------------------------------------------
     # Derive statistics FROM recorded runs
     # --------------------------------------------------
     successful_runs = [
-        r for r in results["runs"]
-        if r.get("status") == "success"
+        r for r in results["runs"] if r.get("status") == "success"
     ]
 
     times = [r["elapsed_time"] for r in successful_runs]
@@ -113,7 +142,7 @@ def benchmark_flux_text2img(num_runs: int = 3):
             "std_latency": std,
             "latency_cv": cv,
 
-            # 🔗 Explicit linkage to real output
+            # Cold start explicitly linked to artifact
             "cold_start": {
                 "run_number": cold_run["run_number"],
                 "elapsed_time": cold_run["elapsed_time"],
@@ -127,13 +156,13 @@ def benchmark_flux_text2img(num_runs: int = 3):
             ),
         }
 
-    out_json = os.path.join(out_dir, "flux_text2img_benchmark.json")
+    out_json = os.path.join(out_dir, "flux_img2img_benchmark.json")
     with open(out_json, "w") as f:
         json.dump(results, f, indent=2)
 
-    logger.info(f"Saved → {out_json}")
+    logger.info("Saved → %s", out_json)
     return results
 
 
 if __name__ == "__main__":
-    benchmark_flux_text2img()
+    benchmark_flux_img2img()

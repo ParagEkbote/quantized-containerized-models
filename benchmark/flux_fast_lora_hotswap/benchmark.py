@@ -25,12 +25,27 @@ def benchmark_flux_text2img(num_runs: int = 3):
     out_dir = os.getenv("BENCHMARK_OUTPUT_DIR", ".")
     os.makedirs(out_dir, exist_ok=True)
 
+    # --------------------------------------------------
+    # Canonical benchmark inputs (schema-aligned)
+    # --------------------------------------------------
     input_params = {
         "prompt": "A majestic dragon soaring above a futuristic city.",
         "trigger_word": "Painting",
+
+        # Explicit geometry (latency-critical)
+        "height": 1024,
+        "width": 1024,
+
+        # Diffusion controls (latency-critical)
+        "guidance_scale": 3.5,
+        "num_inference_steps": 40,
+
+        # Explicitly enable LoRA hotswapping
+        # (required for adapter reuse benchmarks)
+        "hotswap": True,
     }
 
-    logger.info("Running Flux Text2Img")
+    logger.info("Running Flux Text2Img benchmark")
     logger.info(json.dumps(input_params, indent=2))
 
     results = {
@@ -41,15 +56,17 @@ def benchmark_flux_text2img(num_runs: int = 3):
     }
 
     # --------------------------------------------------
-    # Execute runs (canonical record)
+    # Execute runs
     # --------------------------------------------------
     for i in range(1, num_runs + 1):
         logger.info(f"--- Run {i}/{num_runs} ---")
 
         try:
             start = time.time()
+
             raw_out = safe_replicate_run(deployment_id, input_params)
-            output = normalize_output(raw_out)
+            output = normalize_output(raw_out, output_type="image")
+
             elapsed = time.time() - start
 
             if not isinstance(output, (bytes, bytearray)):
@@ -61,29 +78,32 @@ def benchmark_flux_text2img(num_runs: int = 3):
             with open(out_path, "wb") as f:
                 f.write(output)
 
-            results["runs"].append({
-                "run_number": i,
-                "elapsed_time": elapsed,
-                "output_file": out_path,
-                "status": "success",
-            })
+            results["runs"].append(
+                {
+                    "run_number": i,
+                    "elapsed_time": elapsed,
+                    "output_file": out_path,
+                    "status": "success",
+                }
+            )
 
-            logger.info(f"Run {i} succeeded in {elapsed:.3f}s")
+            logger.info("Run %d succeeded in %.3fs", i, elapsed)
 
         except Exception as e:
             logger.exception("Run failed")
-            results["runs"].append({
-                "run_number": i,
-                "status": "failed",
-                "error": str(e),
-            })
+            results["runs"].append(
+                {
+                    "run_number": i,
+                    "status": "failed",
+                    "error": str(e),
+                }
+            )
 
     # --------------------------------------------------
-    # Statistics derived FROM runs
+    # Statistics (derived)
     # --------------------------------------------------
     successful_runs = [
-        r for r in results["runs"]
-        if r.get("status") == "success"
+        r for r in results["runs"] if r.get("status") == "success"
     ]
 
     times = [r["elapsed_time"] for r in successful_runs]
@@ -106,20 +126,16 @@ def benchmark_flux_text2img(num_runs: int = 3):
         results["statistics"] = {
             "successful_runs": len(successful_runs),
             "failed_runs": num_runs - len(successful_runs),
-
             "avg_latency": avg,
             "min_latency": mn,
             "max_latency": mx,
             "std_latency": std,
             "latency_cv": cv,
-
-            # cold start is now traceable
             "cold_start": {
                 "run_number": cold_run["run_number"],
                 "elapsed_time": cold_run["elapsed_time"],
                 "output_file": cold_run["output_file"],
             },
-
             "warm_avg_latency": warm_avg,
             "cold_vs_warm_ratio": (
                 cold_run["elapsed_time"] / warm_avg
@@ -131,7 +147,7 @@ def benchmark_flux_text2img(num_runs: int = 3):
     with open(out_json, "w") as f:
         json.dump(results, f, indent=2)
 
-    logger.info(f"Saved → {out_json}")
+    logger.info("Saved → %s", out_json)
     return results
 
 
