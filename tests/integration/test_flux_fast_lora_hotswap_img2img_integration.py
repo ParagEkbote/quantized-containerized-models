@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from integration.utils import run_and_time
+from integration.utils import  run_image_and_time
 
 # -----------------------------------------------------
 # Logging configuration
@@ -24,6 +24,9 @@ BASE_INPUT = {
     # Public image URL required by schema
     "init_image": "https://images.pexels.com/photos/33649783/pexels-photo-33649783.jpeg",
     "seed": 42,
+    "strength": 0.60,
+    "guidance_scale": 7.0,
+    "num_inference_steps": 25,
 }
 
 
@@ -57,7 +60,7 @@ def test_flux_fast_lora_img2img_two_adapters():
         logger.info("Calling model with trigger_word=%s", req["trigger_word"])
         logger.info("Input params: %s", req)
 
-        output, elapsed = run_and_time(
+        output, elapsed = run_image_and_time(
             DEPLOYMENT_ID,
             req,
             timeout_s=120.0,  # img2img can be slow

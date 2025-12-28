@@ -22,22 +22,11 @@ if not logging.getLogger().handlers:
 logger = logging.getLogger(__name__)
 
 
-def calculate_efficiency(words_per_sec: float) -> str:
-    if words_per_sec >= 50:
-        return "Excellent"
-    if words_per_sec >= 20:
-        return "Very Good"
-    if words_per_sec >= 10:
-        return "Good"
-    if words_per_sec >= 5:
-        return "Fair"
-    return "Poor"
-
 
 def benchmark_phi4_unsloth(num_runs: int = 3):
     deployment_id = (
         "paragekbote/phi-4-reasoning-plus-unsloth:"
-        "a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"
+        "22438984324149ef4ecfcea3d631185641c23e46ce526ae4439b8c89c27ac086"
     )
 
     out_dir = os.getenv("BENCHMARK_OUTPUT_DIR", ".")
@@ -159,8 +148,6 @@ def benchmark_phi4_unsloth(num_runs: int = 3):
                 cold_run["elapsed_time"] / warm_avg
                 if warm_avg else None
             ),
-
-            "efficiency_rating": calculate_efficiency(words_per_sec),
             "consistency_score": consistency,
         }
 

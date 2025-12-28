@@ -22,18 +22,6 @@ if not logging.getLogger().handlers:
 logger = logging.getLogger(__name__)
 
 
-def calculate_efficiency_rating(words_per_sec: float) -> str:
-    if words_per_sec >= 50:
-        return "Excellent"
-    if words_per_sec >= 20:
-        return "Very Good"
-    if words_per_sec >= 10:
-        return "Good"
-    if words_per_sec >= 5:
-        return "Fair"
-    return "Poor"
-
-
 def benchmark_smollm3(num_runs: int = 3):
     deployment_id = (
         "paragekbote/smollm3-3b-smashed:"
@@ -164,8 +152,6 @@ def benchmark_smollm3(num_runs: int = 3):
                 cold_run["elapsed_time"] / warm_avg
                 if warm_avg else None
             ),
-
-            "efficiency_rating": calculate_efficiency_rating(words_per_sec),
             "consistency_score": consistency,
         }
 

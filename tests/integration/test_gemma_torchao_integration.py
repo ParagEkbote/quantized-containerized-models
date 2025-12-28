@@ -1,4 +1,3 @@
-# tests/integration/test_gemma_inference.py
 import logging
 import os
 
@@ -15,9 +14,17 @@ from integration.utils import (
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-DEPLOYMENT_ID = "paragekbote/gemma3-torchao-quant-sparse:44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
+# -----------------------------------------------------
+# Deployment ID (PINNED)
+# -----------------------------------------------------
+DEPLOYMENT_ID = (
+    "paragekbote/gemma3-torchao-quant-sparse:"
+    "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
+)
 
-
+# -----------------------------------------------------
+# Base input
+# -----------------------------------------------------
 BASE_INPUT = {
     "prompt": "Compare supervised, unsupervised and reinforcement learning briefly.",
     "seed": 42,
@@ -35,7 +42,7 @@ BASE_INPUT = {
 )
 def test_gemma_torchao_two_paths():
     """
-    Integration test for the Gemma TorchAO predictor:
+    Integration test for Gemma TorchAO predictor:
     - Call 1: quantization enabled, NO sparsity
     - Call 2: quantization disabled, sparsity enabled
     """
@@ -69,7 +76,12 @@ def test_gemma_torchao_two_paths():
     results = []
 
     for req in (req_quant, req_sparse):
-        text, elapsed = run_and_time(DEPLOYMENT_ID, req)
+        text, elapsed = run_and_time(
+            DEPLOYMENT_ID,
+            req,
+            timeout_s=120.0,
+            min_chars=20,
+        )
 
         logger.info("Request params: %s", req)
         logger.info("Latency: %.2fs", elapsed)
@@ -82,11 +94,9 @@ def test_gemma_torchao_two_paths():
     # --------------------------
     (out1, t1), (out2, t2) = results
 
-    # Outputs should differ
     assert len(out1.strip()) > 20
     assert len(out2.strip()) > 20
 
-    # Latency sanity check (very loose by design)
     ratio = t1 / t2 if t2 > 0 else float("inf")
     assert 0.2 < ratio < 5.0, f"Unexpected latency ratio: {ratio:.2f}"
 

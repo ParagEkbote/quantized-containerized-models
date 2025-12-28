@@ -30,7 +30,7 @@ CANARY_CASES: List[Dict] = [
         "input": {
             "prompt": "A cinematic portrait of a cyberpunk samurai",
             "trigger_word": "Cinematic",
-            "init_image": "https://replicate.delivery/pbxt/example.jpg",
+            "init_image": "https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg",
             "seed": 42,
         },
     },
@@ -39,7 +39,7 @@ CANARY_CASES: List[Dict] = [
         "input": {
             "prompt": "A peaceful countryside village at sunset",
             "trigger_word": "GHIBSKY",
-            "init_image": "https://replicate.delivery/pbxt/example.jpg",
+            "init_image": "https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg",
             "seed": 42,
         },
     },

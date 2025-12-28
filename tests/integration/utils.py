@@ -1,8 +1,6 @@
-# utils.py
-
 import logging
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Callable
 from typing import Any
 
 import replicate
@@ -18,19 +16,29 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------
-# Input helpers
+# Exceptions
 # -----------------------------------------------------
 
+class InferenceTimeoutError(RuntimeError):
+    """Inference exceeded allowed latency."""
 
-def normalize_output(text: str) -> str:
-    return text.strip()
 
+class InvalidModelOutputError(RuntimeError):
+    """Unexpected or invalid model output."""
+
+
+# -----------------------------------------------------
+# Helpers
+# -----------------------------------------------------
 
 def clean_input(payload: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in payload.items() if v is not None}
 
 
 def normalize_string_bools(payload: dict[str, Any], keys: Iterable[str]) -> dict[str, Any]:
+    """
+    Convert boolean-like inputs to lowercase strings for Cog schema compatibility.
+    """
     out = dict(payload)
     for k in keys:
         if k in out:
@@ -43,20 +51,80 @@ def normalize_string_bools(payload: dict[str, Any], keys: Iterable[str]) -> dict
 
 
 # -----------------------------------------------------
-# Exceptions
+# Text execution
 # -----------------------------------------------------
 
+def _run_text_once(
+    deployment_id: str,
+    payload: dict[str, Any],
+    timeout_s: float,
+    *,
+    min_chars: int = 10,
+    validator: Callable[[str], None] | None = None,
+) -> tuple[str, float]:
+    cleaned = clean_input(payload)
 
-class InferenceTimeoutError(RuntimeError):
-    """Inference exceeded allowed latency."""
+    start = time.time()
+    raw = replicate.run(deployment_id, input=cleaned)
+    elapsed = time.time() - start
+
+    if elapsed > timeout_s:
+        raise InferenceTimeoutError(
+            f"Inference exceeded time budget: {elapsed:.2f}s"
+        )
+
+    if not isinstance(raw, str):
+        raise InvalidModelOutputError(
+            f"Expected text output, got {type(raw)}"
+        )
+
+    text = raw.strip()
+
+    if len(text) < min_chars:
+        raise InvalidModelOutputError(
+            f"Output too short ({len(text)} chars)"
+        )
+
+    if validator is not None:
+        validator(text)
+
+    return text, elapsed
+
+
+@retry(
+    retry=retry_if_exception_type(
+        (InferenceTimeoutError, replicate.exceptions.ReplicateError)
+    ),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=5, max=40),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+def run_and_time(
+    deployment_id: str,
+    payload: dict[str, Any],
+    *,
+    timeout_s: float = 90.0,
+    min_chars: int = 10,
+    validator: Callable[[str], None] | None = None,
+) -> tuple[str, float]:
+    """
+    Run a text or multimodal-text Replicate deployment with retries.
+    """
+    return _run_text_once(
+        deployment_id,
+        payload,
+        timeout_s,
+        min_chars=min_chars,
+        validator=validator,
+    )
 
 
 # -----------------------------------------------------
-# Core execution (single attempt)
+# Image execution
 # -----------------------------------------------------
 
-
-def _run_once(
+def _run_image_once(
     deployment_id: str,
     payload: dict[str, Any],
     timeout_s: float,
@@ -68,41 +136,45 @@ def _run_once(
     elapsed = time.time() - start
 
     if elapsed > timeout_s:
-        raise InferenceTimeoutError(f"Inference exceeded time budget: {elapsed:.2f}s")
+        raise InferenceTimeoutError(
+            f"Inference exceeded time budget: {elapsed:.2f}s"
+        )
 
-    text = normalize_output(raw)
+    # Accept common Replicate image formats
+    if isinstance(raw, list):
+        if not raw:
+            raise InvalidModelOutputError("Empty image output list")
+        raw = raw[0]
 
-    if len(text.strip()) < 10:
-        raise AssertionError("Model output is empty or too short")
+    if not isinstance(raw, str):
+        raise InvalidModelOutputError(
+            f"Expected image URL string, got {type(raw)}"
+        )
 
-    return text, elapsed
+    if not (raw.startswith("http") or raw.endswith(".png")):
+        raise InvalidModelOutputError(
+            f"Unexpected image output: {raw}"
+        )
 
-
-# -----------------------------------------------------
-# Tenacity-wrapped execution
-# -----------------------------------------------------
+    return raw, elapsed
 
 
 @retry(
-    retry=retry_if_exception_type((InferenceTimeoutError, replicate.exceptions.ReplicateError)),
+    retry=retry_if_exception_type(
+        (InferenceTimeoutError, replicate.exceptions.ReplicateError)
+    ),
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=2, min=5, max=40),
     before_sleep=before_sleep_log(logger, logging.WARNING),
     reraise=True,
 )
-def run_and_time(
+def run_image_and_time(
     deployment_id: str,
     payload: dict[str, Any],
     *,
-    timeout_s: float = 90.0,
+    timeout_s: float = 180.0,
 ) -> tuple[str, float]:
     """
-    Run a Replicate deployment with retries.
-
-    Retries on:
-    - slow cold starts
-    - transient Replicate errors
-
-    Fails hard only after retries are exhausted.
+    Run an image-producing Replicate deployment with retries.
     """
-    return _run_once(deployment_id, payload, timeout_s)
+    return _run_image_once(deployment_id, payload, timeout_s)

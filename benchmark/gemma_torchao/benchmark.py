@@ -17,22 +17,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def calculate_efficiency(tokens_per_sec: float) -> str:
-    if tokens_per_sec >= 50:
-        return "Excellent"
-    if tokens_per_sec >= 20:
-        return "Very Good"
-    if tokens_per_sec >= 10:
-        return "Good"
-    if tokens_per_sec >= 5:
-        return "Fair"
-    return "Poor"
-
 
 def benchmark_gemma3_vlm(num_runs: int = 3):
     deployment_id = (
         "paragekbote/gemma3-torchao-quant-sparse:"
-        "44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
+        "396049cbfd6b79f8422fe41152aa2c0a0ddc0a602d21efb6dfd49c23799f7d74"
     )
 
     out_dir = os.getenv("BENCHMARK_OUTPUT_DIR", ".")
@@ -168,8 +157,6 @@ def benchmark_gemma3_vlm(num_runs: int = 3):
                 cold_run["elapsed_time"] / warm_avg
                 if warm_avg else None
             ),
-
-            "efficiency_rating": calculate_efficiency(tps),
             "consistency_score": consistency,
         }
 

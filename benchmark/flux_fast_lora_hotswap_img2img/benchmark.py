@@ -26,8 +26,13 @@ def benchmark_flux_text2img(num_runs: int = 3):
     os.makedirs(out_dir, exist_ok=True)
 
     input_params = {
-        "prompt": "A majestic dragon soaring above a futuristic city.",
-        "trigger_word": "Painting",
+            "seed": 47,
+            "prompt": "A majestic peacock with enhanced detail, vibrant iridescent feathers, sharp eye-spots, natural lighting, and improved clarity and depth.",
+            "strength": 0.75,
+            "init_image": "https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg",
+            "trigger_word": "Manga",
+            "guidance_scale": 6.0,
+            "num_inference_steps": 20
     }
 
     logger.info("Running Flux Text2Img")

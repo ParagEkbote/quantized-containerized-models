@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from integration.utils import run_and_time
+from integration.utils import  run_image_and_time
 
 # -----------------------------------------------------
 # Logging configuration
@@ -21,6 +21,8 @@ DEPLOYMENT_ID = "paragekbote/flux-fast-lora-hotswap:a958687317369721e1ce66e5436f
 # -----------------------------------------------------
 BASE_REQUEST = {
     "prompt": "A serene mountain landscape during sunrise.",
+    "guidance_scale": 7.0,
+    "num_inference_steps": 25,
 }
 
 
@@ -54,7 +56,7 @@ def test_flux_fast_lora_two_modes():
         logger.info("Input params: %s", req)
 
         # Tenacity-wrapped execution
-        output, elapsed = run_and_time(
+        output, elapsed = run_image_and_time(
             DEPLOYMENT_ID,
             req,
             timeout_s=120.0,  # image generation can be slow

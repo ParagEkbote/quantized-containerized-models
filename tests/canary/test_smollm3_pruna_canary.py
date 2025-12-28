@@ -1,160 +1,138 @@
+from __future__ import annotations
+
 import os
-import subprocess
-import time
-from pathlib import Path
+from typing import Dict, List
 
+import numpy as np
 import pytest
-import requests
+import replicate
+from sentence_transformers import SentenceTransformer
 
-# ------------------------------------------------------
-# Skip RULES (module-level)
-# ------------------------------------------------------
-
-# Skip if Modal credentials missing
-if not (os.getenv("MODAL_TOKEN_ID") and os.getenv("MODAL_TOKEN_SECRET")):
-    pytest.skip(
-        "Modal credentials missing → skipping deployment tests",
-        allow_module_level=True,
-    )
-
-# Skip if no GPU available
-if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/nvidia")):
-    pytest.skip(
-        "GPU unavailable → skipping deployment tests",
-        allow_module_level=True,
-    )
+from utils import run_and_time
 
 
-# ------------------------------------------------------
-# HELPER: Wait for server to come online
-# ------------------------------------------------------
+# ---------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------
 
+MODEL_BASE = "r8.im/paragekbote/smollm3-3b-smashed"
+STABLE_MODEL_ID = os.environ.get("STABLE_MODEL_ID")
 
-def wait_for_server(url="http://localhost:5000/ping", timeout=60):
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            r = requests.get(url, timeout=2)
-            if r.status_code == 200:
-                return True
-        except Exception:
-            pass
-        time.sleep(1)
-    return False
+MIN_OUTPUT_CHARS = 150
+MIN_LENGTH_RATIO = 0.4
+MAX_LENGTH_RATIO = 2.8
+MIN_SEMANTIC_SIMILARITY = 0.84
 
-
-# ------------------------------------------------------
-# TEST 1 — Container builds successfully
-# ------------------------------------------------------
-
-
-@pytest.mark.deployment
-def test_smollm3_container_builds():
-    """Ensure `cog build` succeeds without errors."""
-
-    result = subprocess.run(
-        ["cog", "build", "-t", "smollm3-test"],
-        stdout=subprocess.PIPE,  # ✅ Add these instead
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    assert result.returncode == 0, "Cog build failed.\nSTDOUT:\n" + result.stdout + "\nSTDERR:\n" + result.stderr
-
-
-# ------------------------------------------------------
-# TEST 2 — Server boots
-# ------------------------------------------------------
-
-
-@pytest.mark.deployment
-def test_smollm3_server_boots():
-    """Ensure `cog serve` boots and responds to /ping."""
-
-    proc = subprocess.Popen(
-        ["cog", "serve"],
-        stdout=subprocess.PIPE,  # ✅ Add these instead
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    try:
-        ok = wait_for_server()
-        assert ok, "cog serve did not become ready within timeout"
-    finally:
-        proc.terminate()
-        proc.wait(timeout=10)
-
-
-# ------------------------------------------------------
-# TEST 3 — Missing required fields produce 422
-# ------------------------------------------------------
-
-
-@pytest.mark.deployment
-def test_smollm3_missing_fields():
-    """POST /predictions without prompt must return HTTP 422."""
-
-    # Boot server
-    proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    try:
-        assert wait_for_server(), "Server did not become ready"
-
-        # Missing prompt → 422
-        response = requests.post(
-            "http://localhost:5000/predictions",
-            json={},
-            timeout=5,
-        )
-
-        assert response.status_code == 422, f"Expected 422, got {response.status_code}"
-
-    finally:
-        proc.terminate()
-        proc.wait(timeout=10)
-
-
-# ------------------------------------------------------
-# TEST 4 — Full inference
-# ------------------------------------------------------
-
-
-@pytest.mark.deployment
-def test_smollm3_full_prediction():
-    """
-    Send a real request through the container and ensure:
-    - server responds
-    - output_path is returned
-    - file exists on disk
-    """
-
-    proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    try:
-        assert wait_for_server(), "Server did not become ready"
-
-        payload = {
-            "prompt": "Explain reinforcement learning briefly.",
-            "max_new_tokens": 64,
+CANARY_CASES: List[Dict] = [
+    {
+        "name": "no_think_reasoning",
+        "input": {
+            "prompt": "Why does increasing batch size sometimes reduce training stability?",
             "mode": "no_think",
-        }
+            "seed": 42,
+        },
+    },
+    {
+        "name": "think_reasoning",
+        "input": {
+            "prompt": "Explain the difference between quantization and pruning in neural networks.",
+            "mode": "think",
+            "seed": 42,
+        },
+    },
+]
 
-        response = requests.post(
-            "http://localhost:5000/predictions",
-            json=payload,
-            timeout=60,
+
+# ---------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------
+
+def get_latest_model_id() -> str:
+    model = replicate.models.get(MODEL_BASE)
+    versions = list(model.versions.list())
+    versions.sort(key=lambda v: v.created_at, reverse=True)
+    return f"{MODEL_BASE}:{versions[0].id}"
+
+
+def normalize_text(text: str) -> str:
+    """
+    Normalize whitespace and remove obvious template noise.
+    """
+    text = " ".join(text.strip().split())
+    for marker in ["/think", "/no_think"]:
+        text = text.replace(marker, "")
+    return text.strip()
+
+
+def repetition_ratio(text: str) -> float:
+    """
+    Detect pathological repetition (common failure mode in smashed models).
+    """
+    tokens = text.split()
+    if not tokens:
+        return 1.0
+    unique = len(set(tokens))
+    return unique / len(tokens)
+
+
+# ---------------------------------------------------------------------
+# Canary test
+# ---------------------------------------------------------------------
+
+@pytest.mark.canary
+def test_canary_smollm3_pruna():
+    """
+    Canary release test for SmolLM3 + Pruna smashed deployment.
+    Compares candidate vs last stable version.
+    """
+
+    if not STABLE_MODEL_ID:
+        pytest.skip("STABLE_MODEL_ID not set")
+
+    candidate_id = get_latest_model_id()
+
+    if candidate_id == STABLE_MODEL_ID:
+        pytest.skip("Candidate equals stable")
+
+    embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+    for case in CANARY_CASES:
+        old_text, _ = run_and_time(STABLE_MODEL_ID, case["input"])
+        new_text, _ = run_and_time(candidate_id, case["input"])
+
+        old_text = normalize_text(old_text)
+        new_text = normalize_text(new_text)
+
+        # --------------------------------------------------
+        # Hard blockers
+        # --------------------------------------------------
+        assert len(new_text) >= MIN_OUTPUT_CHARS, (
+            f"{case['name']} output too short"
         )
 
-        assert response.status_code == 200, f"Prediction failed: {response.text}"
+        # --------------------------------------------------
+        # Length sanity
+        # --------------------------------------------------
+        ratio = len(new_text) / max(len(old_text), 1)
+        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, (
+            f"{case['name']} length ratio abnormal: {ratio:.2f}"
+        )
 
-        data = response.json()
-        assert "output" in data, "Missing output in response"
+        # --------------------------------------------------
+        # Repetition guard (smashed-model specific)
+        # --------------------------------------------------
+        rep = repetition_ratio(new_text)
+        assert rep > 0.35, (
+            f"{case['name']} excessive repetition detected: {rep:.2f}"
+        )
 
-        output_path = data["output"]
-        assert isinstance(output_path, str)
-        assert Path(output_path).exists(), f"Output file not found: {output_path}"
+        # --------------------------------------------------
+        # Semantic similarity (primary signal)
+        # --------------------------------------------------
+        old_emb = embedder.encode(old_text, normalize_embeddings=True)
+        new_emb = embedder.encode(new_text, normalize_embeddings=True)
 
-    finally:
-        proc.terminate()
-        proc.wait(timeout=10)
+        similarity = float(np.dot(old_emb, new_emb))
+        assert similarity >= MIN_SEMANTIC_SIMILARITY, (
+            f"{case['name']} semantic drift too high: {similarity:.3f}"
+        )

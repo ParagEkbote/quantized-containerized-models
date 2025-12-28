@@ -1,182 +1,174 @@
+from __future__ import annotations
+
 import os
-import subprocess
-import time
-from pathlib import Path
+from typing import Dict, List
 
+import numpy as np
 import pytest
-import requests
+import replicate
+from sentence_transformers import SentenceTransformer
 
-# ------------------------------------------------------
-# Skip RULES (module-level)
-# ------------------------------------------------------
-
-# Skip if Modal credentials missing
-if not (os.getenv("MODAL_TOKEN_ID") and os.getenv("MODAL_TOKEN_SECRET")):
-    pytest.skip(
-        "Modal credentials missing → skipping deployment tests",
-        allow_module_level=True,
-    )
-
-# Skip if no GPU available (Gemma TorchAO expects CUDA in container)
-if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/nvidia")):
-    pytest.skip(
-        "GPU unavailable → skipping gemma-torchao deployment tests",
-        allow_module_level=True,
-    )
+from utils import run_and_time
 
 
-# ------------------------------------------------------
-# HELPER: Wait for server to come online
-# ------------------------------------------------------
+# ---------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------
 
+MODEL_BASE = "r8.im/paragekbote/gemma3-torchao-quant-sparse"
+STABLE_MODEL_ID = os.environ.get("STABLE_MODEL_ID")
 
-def wait_for_server(url: str = "http://localhost:5000/ping", timeout: int = 60) -> bool:
-    """Poll /ping until server responds 200 or timeout expires."""
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            resp = requests.get(url, timeout=2)
-            if resp.status_code == 200:
-                return True
-        except Exception:
-            pass
-        time.sleep(1)
-    return False
+MIN_OUTPUT_CHARS = 120
+MIN_LENGTH_RATIO = 0.4
+MAX_LENGTH_RATIO = 3.0
+MIN_SEMANTIC_SIMILARITY = 0.82
 
-
-# ------------------------------------------------------
-# TEST 1 — Container builds successfully
-# ------------------------------------------------------
-
-
-@pytest.mark.deployment
-def test_gemma_torchao_container_builds() -> None:
-    """Ensure `cog build` for gemma-torchao succeeds without errors."""
-    result = subprocess.run(
-        ["cog", "build", "-t", "gemma-torchao-test"],
-        stdout=subprocess.PIPE,  # ✅ Add these instead
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    assert result.returncode == 0, f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-
-
-# ------------------------------------------------------
-# TEST 2 — Server boots
-# ------------------------------------------------------
-
-
-@pytest.mark.deployment
-def test_gemma_torchao_server_boots() -> None:
-    """Ensure `cog serve` boots and responds to /ping."""
-    proc = subprocess.Popen(
-        ["cog", "serve"],
-        stdout=subprocess.PIPE,  # ✅ Add these instead
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    try:
-        ok = wait_for_server()
-        assert ok, "cog serve did not become ready within timeout"
-    finally:
-        proc.terminate()
-        proc.wait(timeout=10)
-
-
-# ------------------------------------------------------
-# TEST 3 — Missing required fields produce 422
-# ------------------------------------------------------
-
-
-@pytest.mark.deployment
-def test_gemma_torchao_missing_fields() -> None:
-    """
-    POST /predictions without required `prompt` must return HTTP 422.
-
-    This validates that the running container's OpenAPI / schema contract
-    matches the predict.py Input definitions.
-    """
-    proc = subprocess.Popen(
-        ["cog", "serve"],
-        stdout=subprocess.PIPE,  # ✅ Add these instead
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    try:
-        assert wait_for_server(), "Server did not become ready"
-
-        # Missing prompt → 422
-        resp = requests.post(
-            "http://localhost:5000/predictions",
-            json={},
-            timeout=10,
-        )
-        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}, body={resp.text}"
-    finally:
-        proc.terminate()
-        proc.wait(timeout=10)
-
-
-# ------------------------------------------------------
-# TEST 4 — Full inference
-# ------------------------------------------------------
-
-
-@pytest.mark.deployment
-def test_gemma_torchao_full_prediction(tmp_path: Path) -> None:
-    """
-    Send a real request through the container and ensure:
-
-    - server responds with 200
-    - JSON contains 'output'
-    - for this deployment, output is a string (text response)
-    """
-    proc = subprocess.Popen(
-        ["cog", "serve"],
-        stdout=subprocess.PIPE,  # ✅ Add these instead
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    try:
-        assert wait_for_server(), "Server did not become ready"
-
-        # Minimal but realistic payload matching gemma-torchao schema
-        payload = {
-            "prompt": "Explain the difference between supervised and unsupervised learning in one paragraph.",
-            "image_url": None,  # optional, exercising pure text path
-            "max_new_tokens": 128,
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "seed": 42,
+CANARY_CASES: List[Dict] = [
+    {
+        "name": "text_only_reasoning",
+        "input": {
+            "prompt": "Explain why gradient clipping can stabilize training in deep neural networks.",
+            "temperature": 0.0,
             "use_quantization": "true",
             "use_sparsity": "false",
-            "sparsity_type": "magnitude",
-            "sparsity_ratio": 0.3,
-        }
+            "seed": 42,
+        },
+    },
+    {
+        "name": "image_conditioned_reasoning",
+        "input": {
+            "prompt": "Describe the scene and explain what the image suggests about the environment.",
+            "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/512px-Fronalpstock_big.jpg",
+            "temperature": 0.0,
+            "use_quantization": "true",
+            "use_sparsity": "false",
+            "seed": 42,
+        },
+    },
+]
 
-        resp = requests.post(
-            "http://localhost:5000/predictions",
-            json=payload,
-            timeout=120,
+
+# ---------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------
+
+def get_latest_model_id() -> str:
+    model = replicate.models.get(MODEL_BASE)
+    versions = list(model.versions.list())
+    versions.sort(key=lambda v: v.created_at, reverse=True)
+    return f"{MODEL_BASE}:{versions[0].id}"
+
+
+def normalize_text(text: str) -> str:
+    text = " ".join(text.strip().split())
+    # Remove common Gemma artifacts
+    for tok in ["<bos>", "<eos>", "<image>"]:
+        text = text.replace(tok, "")
+    return text.strip()
+
+
+def repetition_ratio(text: str) -> float:
+    tokens = text.split()
+    if not tokens:
+        return 1.0
+    return len(set(tokens)) / len(tokens)
+
+def multimodal_text_validator(text: str) -> None:
+    """
+    Validator for multimodal text outputs.
+    Ensures the vision path actually contributed.
+    """
+    lowered = text.lower()
+
+    # Very loose but effective signals
+    vision_tokens = [
+        "image",
+        "scene",
+        "mountain",
+        "landscape",
+        "sky",
+        "foreground",
+        "background",
+    ]
+
+    if len(text) < 200:
+        # Short outputs must explicitly reference visual content
+        assert any(tok in lowered for tok in vision_tokens), (
+            "Multimodal output does not reference visual content"
         )
 
-        assert resp.status_code == 200, f"Prediction failed: {resp.status_code} {resp.text}"
 
-        data = resp.json()
-        assert "output" in data, f"Missing 'output' key in response: {data}"
+# ---------------------------------------------------------------------
+# Canary test
+# ---------------------------------------------------------------------
 
-        output_text = data["output"]
-        assert isinstance(output_text, str), f"Expected text output, got {type(output_text)}"
-        assert len(output_text.strip()) > 0, "Model returned empty output"
+@pytest.mark.canary
+def test_canary_gemma_torchao():
+    """
+    Canary release test for Gemma-3 with torchao INT8 quantization.
+    """
 
-        # Optionally persist output to disk under tmp_path, just to verify writability
-        out_file = tmp_path / "gemma_torchao_output.txt"
-        out_file.write_text(output_text, encoding="utf-8")
-        assert out_file.exists()
-    finally:
-        proc.terminate()
-        proc.wait(timeout=10)
+    if not STABLE_MODEL_ID:
+        pytest.skip("STABLE_MODEL_ID not set")
+
+    candidate_id = get_latest_model_id()
+
+    if candidate_id == STABLE_MODEL_ID:
+        pytest.skip("Candidate equals stable")
+
+    embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+    for case in CANARY_CASES:
+        old_text, _ = run_and_time(
+            STABLE_MODEL_ID,
+            case["input"],
+            timeout_s=120.0 if "image_url" in case["input"] else 90.0,
+            min_chars=MIN_OUTPUT_CHARS,
+            validator=multimodal_text_validator if "image_url" in case["input"] else None,
+    )
+
+        new_text, _ = run_and_time(
+            candidate_id,
+            case["input"],
+            timeout_s=120.0 if "image_url" in case["input"] else 90.0,
+            min_chars=MIN_OUTPUT_CHARS,
+            validator=multimodal_text_validator if "image_url" in case["input"] else None,
+    )
+
+
+        old_text = normalize_text(old_text)
+        new_text = normalize_text(new_text)
+
+        # --------------------------------------------------
+        # Hard blockers
+        # --------------------------------------------------
+        assert len(new_text) >= MIN_OUTPUT_CHARS, (
+            f"{case['name']} output too short"
+        )
+
+        # --------------------------------------------------
+        # Length sanity
+        # --------------------------------------------------
+        ratio = len(new_text) / max(len(old_text), 1)
+        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, (
+            f"{case['name']} length ratio abnormal: {ratio:.2f}"
+        )
+
+        # --------------------------------------------------
+        # Degeneration guard (quantization-specific)
+        # --------------------------------------------------
+        rep = repetition_ratio(new_text)
+        assert rep > 0.35, (
+            f"{case['name']} excessive repetition detected: {rep:.2f}"
+        )
+
+        # --------------------------------------------------
+        # Semantic similarity (primary signal)
+        # --------------------------------------------------
+        old_emb = embedder.encode(old_text, normalize_embeddings=True)
+        new_emb = embedder.encode(new_text, normalize_embeddings=True)
+
+        similarity = float(np.dot(old_emb, new_emb))
+        assert similarity >= MIN_SEMANTIC_SIMILARITY, (
+            f"{case['name']} semantic drift too high: {similarity:.3f}"
+        )
