@@ -296,7 +296,6 @@ class Predictor(BasePredictor):
         self.processor = AutoProcessor.from_pretrained(MODEL_ID, use_fast=True)
         self.model = AutoModelForImageTextToText.from_pretrained(
             MODEL_ID,
-            token=hf_token,
             dtype=torch.bfloat16,
             device_map="auto",
         )

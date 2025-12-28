@@ -7,17 +7,17 @@ import pytest
 import requests
 
 # ------------------------------------------------------
-# Skip if Modal credentials missing
+# Skip RULES (module-level)
 # ------------------------------------------------------
+
+# Skip if Modal credentials missing
 if not (os.getenv("MODAL_TOKEN_ID") and os.getenv("MODAL_TOKEN_SECRET")):
     pytest.skip(
         "Modal credentials missing → skipping deployment tests",
         allow_module_level=True,
     )
 
-# ------------------------------------------------------
-# Skip if no GPU
-# ------------------------------------------------------
+# Skip if no GPU available
 if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/nvidia")):
     pytest.skip(
         "GPU unavailable → skipping deployment tests",
@@ -26,8 +26,10 @@ if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/
 
 
 # ------------------------------------------------------
-# Helper: wait for server readiness
+# HELPER: Wait for server to come online
 # ------------------------------------------------------
+
+
 def wait_for_server(url="http://localhost:5000/ping", timeout=60):
     start = time.time()
     while time.time() - start < timeout:
@@ -42,49 +44,64 @@ def wait_for_server(url="http://localhost:5000/ping", timeout=60):
 
 
 # ------------------------------------------------------
-# TEST 1 — Build
+# TEST 1 — Container builds successfully
 # ------------------------------------------------------
+
+
 @pytest.mark.deployment
-def test_phi4_reasoning_container_builds():
+def test_smollm3_container_builds():
+    """Ensure `cog build` succeeds without errors."""
+
     result = subprocess.run(
-        ["cog", "build", "-t", "phi4-reasoning-plus-unsloth-test"],
-        capture_output=True,
-        check=False,
+        ["cog", "build", "-t", "smollm3-test"],
+        stdout=subprocess.PIPE,  # ✅ Add these instead
+        stderr=subprocess.PIPE,
         text=True,
     )
 
-    assert result.returncode == 0, f"Cog build failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert result.returncode == 0, "Cog build failed.\nSTDOUT:\n" + result.stdout + "\nSTDERR:\n" + result.stderr
 
 
 # ------------------------------------------------------
 # TEST 2 — Server boots
 # ------------------------------------------------------
+
+
 @pytest.mark.deployment
-def test_phi4_reasoning_server_boots():
+def test_smollm3_server_boots():
+    """Ensure `cog serve` boots and responds to /ping."""
+
     proc = subprocess.Popen(
         ["cog", "serve"],
-        capture_output=True,
-        check=False,
+        stdout=subprocess.PIPE,  # ✅ Add these instead
+        stderr=subprocess.PIPE,
         text=True,
     )
 
     try:
-        assert wait_for_server(), "cog serve did not become ready within timeout"
+        ok = wait_for_server()
+        assert ok, "cog serve did not become ready within timeout"
     finally:
         proc.terminate()
         proc.wait(timeout=10)
 
 
 # ------------------------------------------------------
-# TEST 3 — Validate schema 422
+# TEST 3 — Missing required fields produce 422
 # ------------------------------------------------------
+
+
 @pytest.mark.deployment
-def test_phi4_reasoning_missing_fields():
+def test_smollm3_missing_fields():
+    """POST /predictions without prompt must return HTTP 422."""
+
+    # Boot server
     proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     try:
         assert wait_for_server(), "Server did not become ready"
 
+        # Missing prompt → 422
         response = requests.post(
             "http://localhost:5000/predictions",
             json={},
@@ -99,16 +116,29 @@ def test_phi4_reasoning_missing_fields():
 
 
 # ------------------------------------------------------
-# TEST 4 — Full inference works + output file exists
+# TEST 4 — Full inference
 # ------------------------------------------------------
+
+
 @pytest.mark.deployment
-def test_phi4_reasoning_full_prediction():
+def test_smollm3_full_prediction():
+    """
+    Send a real request through the container and ensure:
+    - server responds
+    - output_path is returned
+    - file exists on disk
+    """
+
     proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     try:
         assert wait_for_server(), "Server did not become ready"
 
-        payload = {"seed": 42, "top_p": 0.95, "prompt": "Why is the sky blue?", "temperature": 0.7, "max_new_tokens": 30}
+        payload = {
+            "prompt": "Explain reinforcement learning briefly.",
+            "max_new_tokens": 64,
+            "mode": "no_think",
+        }
 
         response = requests.post(
             "http://localhost:5000/predictions",
@@ -119,11 +149,11 @@ def test_phi4_reasoning_full_prediction():
         assert response.status_code == 200, f"Prediction failed: {response.text}"
 
         data = response.json()
-        assert "output" in data, "Missing output field"
+        assert "output" in data, "Missing output in response"
 
-        out_file = Path(data["output"])
-        assert out_file.exists(), f"Output file not found: {out_file}"
-        assert out_file.stat().st_size > 0, "Output file is empty"
+        output_path = data["output"]
+        assert isinstance(output_path, str)
+        assert Path(output_path).exists(), f"Output file not found: {output_path}"
 
     finally:
         proc.terminate()

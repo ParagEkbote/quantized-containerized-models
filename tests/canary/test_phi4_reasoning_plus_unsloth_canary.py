@@ -7,15 +7,17 @@ import pytest
 import requests
 
 # ------------------------------------------------------
-# Skip RULES (module-level)
+# Skip if Modal credentials missing
 # ------------------------------------------------------
-
 if not (os.getenv("MODAL_TOKEN_ID") and os.getenv("MODAL_TOKEN_SECRET")):
     pytest.skip(
         "Modal credentials missing → skipping deployment tests",
         allow_module_level=True,
     )
 
+# ------------------------------------------------------
+# Skip if no GPU
+# ------------------------------------------------------
 if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/nvidia")):
     pytest.skip(
         "GPU unavailable → skipping deployment tests",
@@ -24,10 +26,8 @@ if not (os.environ.get("NVIDIA_VISIBLE_DEVICES") or os.path.isdir("/proc/driver/
 
 
 # ------------------------------------------------------
-# Wait until server is ready
+# Helper: wait for server readiness
 # ------------------------------------------------------
-
-
 def wait_for_server(url="http://localhost:5000/ping", timeout=60):
     start = time.time()
     while time.time() - start < timeout:
@@ -44,14 +44,12 @@ def wait_for_server(url="http://localhost:5000/ping", timeout=60):
 # ------------------------------------------------------
 # TEST 1 — Build
 # ------------------------------------------------------
-
-
 @pytest.mark.deployment
-def test_flux_fast_lora_hotswap_container_builds():
+def test_phi4_reasoning_container_builds():
     result = subprocess.run(
-        ["cog", "build", "-t", "flux-fast-lora-hotswap-test"],
-        capture_output=True,
-        check=False,
+        ["cog", "build", "-t", "phi4-reasoning-plus-unsloth-test"],
+        stdout=subprocess.PIPE,  # ✅ Add these instead
+        stderr=subprocess.PIPE,
         text=True,
     )
 
@@ -59,16 +57,14 @@ def test_flux_fast_lora_hotswap_container_builds():
 
 
 # ------------------------------------------------------
-# TEST 2 — Serve boots
+# TEST 2 — Server boots
 # ------------------------------------------------------
-
-
 @pytest.mark.deployment
-def test_flux_fast_lora_hotswap_server_boots():
+def test_phi4_reasoning_server_boots():
     proc = subprocess.Popen(
         ["cog", "serve"],
-        capture_output=True,
-        check=False,
+        stdout=subprocess.PIPE,  # ✅ Add these instead
+        stderr=subprocess.PIPE,
         text=True,
     )
 
@@ -80,12 +76,10 @@ def test_flux_fast_lora_hotswap_server_boots():
 
 
 # ------------------------------------------------------
-# TEST 3 — 422 schema error check
+# TEST 3 — Validate schema 422
 # ------------------------------------------------------
-
-
 @pytest.mark.deployment
-def test_flux_fast_lora_hotswap_missing_fields():
+def test_phi4_reasoning_missing_fields():
     proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     try:
@@ -93,7 +87,7 @@ def test_flux_fast_lora_hotswap_missing_fields():
 
         response = requests.post(
             "http://localhost:5000/predictions",
-            json={},  # missing prompt/trigger_word
+            json={},
             timeout=5,
         )
 
@@ -105,21 +99,16 @@ def test_flux_fast_lora_hotswap_missing_fields():
 
 
 # ------------------------------------------------------
-# TEST 4 — Full inference
+# TEST 4 — Full inference works + output file exists
 # ------------------------------------------------------
-
-
 @pytest.mark.deployment
-def test_flux_fast_lora_hotswap_full_prediction():
+def test_phi4_reasoning_full_prediction():
     proc = subprocess.Popen(["cog", "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     try:
         assert wait_for_server(), "Server did not become ready"
 
-        payload = {
-            "prompt": "a leopard drinking milkshake",
-            "trigger_word": "GHIBSKY",
-        }
+        payload = {"seed": 42, "top_p": 0.95, "prompt": "Why is the sky blue?", "temperature": 0.7, "max_new_tokens": 30}
 
         response = requests.post(
             "http://localhost:5000/predictions",
@@ -133,8 +122,8 @@ def test_flux_fast_lora_hotswap_full_prediction():
         assert "output" in data, "Missing output field"
 
         out_file = Path(data["output"])
-        assert out_file.exists(), f"Output file missing: {out_file}"
-        assert out_file.stat().st_size > 0, "Generated output image file is empty"
+        assert out_file.exists(), f"Output file not found: {out_file}"
+        assert out_file.stat().st_size > 0, "Output file is empty"
 
     finally:
         proc.terminate()
