@@ -16,7 +16,7 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "r8.im/paragekbote/smollm3-3b-smashed"
-STABLE_MODEL_ID = os.environ.get("STABLE_MODEL_ID")
+STABLE_SMOLLM3_MODEL_ID = os.environ.get("STABLE_SMOLLM3_MODEL_ID")
 
 MIN_OUTPUT_CHARS = 150
 MIN_LENGTH_RATIO = 0.4
@@ -86,18 +86,18 @@ def test_canary_smollm3_pruna():
     Compares candidate vs last stable version.
     """
 
-    if not STABLE_MODEL_ID:
-        pytest.skip("STABLE_MODEL_ID not set")
+    if not STABLE_SMOLLM3_MODEL_ID:
+        pytest.skip("STABLE_SMOLLM3_MODEL_IDnot set")
 
     candidate_id = get_latest_model_id()
 
-    if candidate_id == STABLE_MODEL_ID:
+    if candidate_id == STABLE_SMOLLM3_MODEL_ID:
         pytest.skip("Candidate equals stable")
 
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
     for case in CANARY_CASES:
-        old_text, _ = run_and_time(STABLE_MODEL_ID, case["input"])
+        old_text, _ = run_and_time(STABLE_SMOLLM3_MODEL_ID, case["input"])
         new_text, _ = run_and_time(candidate_id, case["input"])
 
         old_text = normalize_text(old_text)

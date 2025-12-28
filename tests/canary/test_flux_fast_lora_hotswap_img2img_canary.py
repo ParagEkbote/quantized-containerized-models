@@ -19,7 +19,7 @@ from utils import run_image_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "r8.im/paragekbote/flux-fast-lora-hotswap-img2img"
-STABLE_MODEL_ID = os.environ.get("STABLE_MODEL_ID")
+STABLE_FLUX_IMG2IMG_MODEL_ID= os.environ.get("STABLE_FLUX_IMG2IMG_MODEL_ID")
 
 PHASH_MAX_DISTANCE = 16
 CLIP_MIN_SIMILARITY = 0.90
@@ -88,18 +88,18 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 @pytest.mark.canary
 def test_canary_release():
-    if not STABLE_MODEL_ID:
-        pytest.skip("STABLE_MODEL_ID not set")
+    if not STABLE_FLUX_IMG2IMG_MODEL_ID:
+        pytest.skip("STABLE_FLUX_IMG2IMG_MODEL_ID not set")
 
     candidate_id = get_latest_model_id()
 
-    if candidate_id == STABLE_MODEL_ID:
+    if candidate_id == STABLE_FLUX_IMG2IMG_MODEL_ID:
         pytest.skip("Candidate equals stable")
 
     clipper = ClipEmbedder()
 
     for case in CANARY_CASES:
-        old_img, _ = run_image_and_time(STABLE_MODEL_ID, case["input"])
+        old_img, _ = run_image_and_time(STABLE_FLUX_IMG2IMG_MODEL_ID, case["input"])
         new_img, _ = run_image_and_time(candidate_id, case["input"])
 
         assert old_img.size == new_img.size

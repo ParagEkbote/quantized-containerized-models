@@ -19,7 +19,7 @@ from utils import run_image_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "r8.im/paragekbote/flux-fast-lora-hotswap"
-STABLE_MODEL_ID = os.environ.get("STABLE_MODEL_ID")
+STABLE_FLUX_MODEL_ID = os.environ.get("STABLE_FLUX_MODEL_ID")
 
 PHASH_MAX_DISTANCE = 18
 CLIP_MIN_SIMILARITY = 0.88
@@ -98,18 +98,18 @@ def test_canary_flux_lora_hotswap():
     Compares latest candidate against last stable version.
     """
 
-    if not STABLE_MODEL_ID:
-        pytest.skip("STABLE_MODEL_ID not set")
+    if not STABLE_FLUX_MODEL_ID:
+        pytest.skip("STABLE_FLUX_MODEL_ID not set")
 
     candidate_id = get_latest_model_id()
 
-    if candidate_id == STABLE_MODEL_ID:
+    if candidate_id == STABLE_FLUX_MODEL_ID:
         pytest.skip("Candidate equals stable")
 
     clipper = ClipEmbedder()
 
     for case in CANARY_CASES:
-        old_img, _ = run_image_and_time(STABLE_MODEL_ID, case["input"])
+        old_img, _ = run_image_and_time(STABLE_FLUX_MODEL_ID, case["input"])
         new_img, _ = run_image_and_time(candidate_id, case["input"])
 
         # --------------------------------------------------

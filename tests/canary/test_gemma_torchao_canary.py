@@ -16,7 +16,7 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "r8.im/paragekbote/gemma3-torchao-quant-sparse"
-STABLE_MODEL_ID = os.environ.get("STABLE_MODEL_ID")
+STABLE_GEMMA_TORCHAO_MODEL_ID = os.environ.get("STABLE_GEMMA_TORCHAO_MODEL_ID")
 
 MIN_OUTPUT_CHARS = 120
 MIN_LENGTH_RATIO = 0.4
@@ -108,19 +108,19 @@ def test_canary_gemma_torchao():
     Canary release test for Gemma-3 with torchao INT8 quantization.
     """
 
-    if not STABLE_MODEL_ID:
-        pytest.skip("STABLE_MODEL_ID not set")
+    if not STABLE_GEMMA_TORCHAO_MODEL_ID:
+        pytest.skip("STABLE_GEMMA_TORCHAO_MODEL_ID not set")
 
     candidate_id = get_latest_model_id()
 
-    if candidate_id == STABLE_MODEL_ID:
+    if candidate_id == STABLE_GEMMA_TORCHAO_MODEL_ID:
         pytest.skip("Candidate equals stable")
 
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
     for case in CANARY_CASES:
         old_text, _ = run_and_time(
-            STABLE_MODEL_ID,
+            STABLE_GEMMA_TORCHAO_MODEL_ID,
             case["input"],
             timeout_s=120.0 if "image_url" in case["input"] else 90.0,
             min_chars=MIN_OUTPUT_CHARS,

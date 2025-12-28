@@ -16,7 +16,7 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "r8.im/paragekbote/phi-4-reasoning-plus-unsloth"
-STABLE_MODEL_ID = os.environ.get("STABLE_MODEL_ID")
+STABLE_PHI4_MODEL_ID= os.environ.get("STABLE_PHI4_MODEL_ID")
 
 MIN_OUTPUT_CHARS = 120
 MAX_LENGTH_RATIO = 2.5
@@ -69,18 +69,18 @@ def test_canary_phi4_reasoning():
     Compares latest candidate against last known stable version.
     """
 
-    if not STABLE_MODEL_ID:
-        pytest.skip("STABLE_MODEL_ID not set")
+    if not STABLE_PHI4_MODEL_ID:
+        pytest.skip("STABLE_PHI4_MODEL_ID not set")
 
     candidate_id = get_latest_model_id()
 
-    if candidate_id == STABLE_MODEL_ID:
+    if candidate_id == STABLE_PHI4_MODEL_ID:
         pytest.skip("Candidate equals stable")
 
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
     for case in CANARY_CASES:
-        old_text, _ = run_and_time(STABLE_MODEL_ID, case["input"])
+        old_text, _ = run_and_time(STABLE_PHI4_MODEL_ID, case["input"])
         new_text, _ = run_and_time(candidate_id, case["input"])
 
         old_text = normalize_text(old_text)
