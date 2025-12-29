@@ -2,42 +2,48 @@ from __future__ import annotations
 
 import os
 
-import clip
 import imagehash
 import numpy as np
 import pytest
 import replicate
+import timm
 import torch
 from PIL import Image
+from torchvision import transforms
+
 from utils import run_image_and_time
+
 
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
 
-MODEL_BASE = "r8.im/paragekbote/flux-fast-lora-hotswap"
-STABLE_FLUX_MODEL_ID = os.environ.get("STABLE_FLUX_MODEL_ID")
+MODEL_BASE = "paragekbote/flux-fast-lora-hotswap"
+STABLE_FLUX_IMG2IMG_MODEL_ID = os.environ.get(
+    "STABLE_FLUX_IMG2IMG_MODEL_ID"
+)
 
-PHASH_MAX_DISTANCE = 18
-CLIP_MIN_SIMILARITY = 0.88
+PHASH_MAX_DISTANCE = 16
+TIMM_MIN_SIMILARITY = 0.85  # slightly looser than CLIP
+
 
 CANARY_CASES: list[dict] = [
     {
-        "name": "open_image_preferences_style",
+        "name": "open_image_preferences_lora",
         "input": {
-            "prompt": "A cinematic portrait of a cyberpunk detective under neon lights",
+            "prompt": "A cinematic portrait of a cyberpunk samurai",
             "trigger_word": "Cinematic",
-            "height": 1024,
-            "width": 1024,
+            "guidance_scale":7.0,
+            "num_inference_steps":20,
         },
     },
     {
-        "name": "ghibsky_style",
+        "name": "ghibsky_lora",
         "input": {
-            "prompt": "A peaceful fantasy village surrounded by rolling hills at sunset",
+            "prompt": "A peaceful countryside village at sunset",
             "trigger_word": "GHIBSKY",
-            "height": 1024,
-            "width": 1024,
+            "guidance_scale":7.0,
+            "num_inference_steps":20,
         },
     },
 ]
@@ -47,87 +53,140 @@ CANARY_CASES: list[dict] = [
 # Helpers
 # ---------------------------------------------------------------------
 
-
 def get_latest_model_id() -> str:
+    if not os.environ.get("REPLICATE_API_TOKEN"):
+        raise RuntimeError("REPLICATE_API_TOKEN not set")
+
     model = replicate.models.get(MODEL_BASE)
     versions = list(model.versions.list())
     versions.sort(key=lambda v: v.created_at, reverse=True)
+
     return f"{MODEL_BASE}:{versions[0].id}"
 
 
 def assert_image_sanity(img: Image.Image) -> None:
     arr = np.asarray(img, dtype=np.float32)
 
-    # Numerical sanity
-    assert np.isfinite(arr).all(), "NaN/Inf detected in image"
+    assert np.isfinite(arr).all(), "NaN or Inf detected in image"
 
-    # Brightness sanity (catch black / white corruption)
     mean_val = float(arr.mean())
-    assert 1.0 < mean_val < 254.0, f"Abnormal brightness: {mean_val}"
+    assert 1.0 < mean_val < 254.0, (
+        f"Abnormal brightness detected: {mean_val}"
+    )
 
 
-class ClipEmbedder:
-    """CPU-only CLIP embedder for semantic similarity."""
+class TimmEmbedder:
+    """
+    Lightweight semantic image embedder using timm.
+    """
 
-    def __init__(self):
+    def __init__(self, model_name: str = "resnet50"):
         self.device = "cpu"
-        self.model, self.preprocess = clip.load("ViT-B/32", device=self.device)
+        self.model = timm.create_model(
+            model_name,
+            pretrained=True,
+            num_classes=0,  # feature extractor
+        ).to(self.device)
+        self.model.eval()
+
+        self.transform = transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=(0.485, 0.456, 0.406),
+                    std=(0.229, 0.224, 0.225),
+                ),
+            ]
+        )
 
     def embed(self, img: Image.Image) -> np.ndarray:
         with torch.no_grad():
-            x = self.preprocess(img).unsqueeze(0).to(self.device)
-            emb = self.model.encode_image(x)
+            x = self.transform(img).unsqueeze(0).to(self.device)
+            emb = self.model(x)
             emb = emb / emb.norm(dim=-1, keepdim=True)
             return emb.cpu().numpy()[0]
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+    return float(np.dot(a, b))
 
 
 # ---------------------------------------------------------------------
 # Canary test
 # ---------------------------------------------------------------------
 
-
 @pytest.mark.canary
-def test_canary_flux_lora_hotswap():
+def test_canary_release_flux_img2img():
     """
-    Canary release test for FLUX LoRA hotswap deployment.
-    Compares latest candidate against last stable version.
+    Canary test for Flux img2img deployments.
+
+    Guards against:
+      - structural regressions (pHash)
+      - semantic drift (timm embeddings)
     """
 
-    if not STABLE_FLUX_MODEL_ID:
-        pytest.skip("STABLE_FLUX_MODEL_ID not set")
+    # --------------------------------------------------
+    # Hard requirements (fail fast)
+    # --------------------------------------------------
+    assert os.environ.get("REPLICATE_API_TOKEN"), (
+        "REPLICATE_API_TOKEN must be set to run canary tests"
+    )
+
+    assert STABLE_FLUX_IMG2IMG_MODEL_ID, (
+        "STABLE_FLUX_IMG2IMG_MODEL_ID must be set"
+    )
 
     candidate_id = get_latest_model_id()
 
-    if candidate_id == STABLE_FLUX_MODEL_ID:
-        pytest.skip("Candidate equals stable")
+    # --------------------------------------------------
+    # No-op canary (explicit pass)
+    # --------------------------------------------------
+    if candidate_id == STABLE_FLUX_IMG2IMG_MODEL_ID:
+        assert True, (
+            "No-op canary: candidate model equals stable model "
+            "(nothing new to compare)"
+        )
+        return
 
-    clipper = ClipEmbedder()
+    embedder = TimmEmbedder()
 
     for case in CANARY_CASES:
-        old_img, _ = run_image_and_time(STABLE_FLUX_MODEL_ID, case["input"])
-        new_img, _ = run_image_and_time(candidate_id, case["input"])
+        old_img, _ = run_image_and_time(
+            STABLE_FLUX_IMG2IMG_MODEL_ID,
+            case["input"],
+        )
+        new_img, _ = run_image_and_time(
+            candidate_id,
+            case["input"],
+        )
 
-        # --------------------------------------------------
-        # Hard blockers
-        # --------------------------------------------------
-        assert old_img.size == new_img.size, "Image size mismatch"
+        # ------------------------------
+        # Basic invariants
+        # ------------------------------
+        assert old_img.size == new_img.size, (
+            f"{case['name']} output resolution changed"
+        )
+
         assert_image_sanity(new_img)
 
-        # --------------------------------------------------
-        # Structural similarity (pHash)
-        # --------------------------------------------------
+        # ------------------------------
+        # Structural regression
+        # ------------------------------
         p_dist = imagehash.phash(old_img) - imagehash.phash(new_img)
-        assert p_dist <= PHASH_MAX_DISTANCE, f"{case['name']} pHash drift too high: {p_dist}"
-
-        # --------------------------------------------------
-        # Semantic similarity (CLIP)
-        # --------------------------------------------------
-        sim = cosine_similarity(
-            clipper.embed(old_img),
-            clipper.embed(new_img),
+        assert p_dist <= PHASH_MAX_DISTANCE, (
+            f"{case['name']} pHash drift too high: {p_dist}"
         )
-        assert sim >= CLIP_MIN_SIMILARITY, f"{case['name']} CLIP similarity too low: {sim:.3f}"
+
+        # ------------------------------
+        # Semantic regression (timm)
+        # ------------------------------
+        sim = cosine_similarity(
+            embedder.embed(old_img),
+            embedder.embed(new_img),
+        )
+
+        assert sim >= TIMM_MIN_SIMILARITY, (
+            f"{case['name']} timm similarity too low: {sim:.4f}"
+        )

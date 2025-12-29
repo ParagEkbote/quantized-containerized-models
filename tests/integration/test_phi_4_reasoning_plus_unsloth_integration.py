@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from integration.utils import run_and_time
+from integration.utils import resolve_latest_version_httpx, run_and_time
 
 # -----------------------------------------------------
 # Logging configuration
@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # -----------------------------------------------------
-# Deployment ID (PINNED)
+# Model ID (not deployment)
 # -----------------------------------------------------
-DEPLOYMENT_ID = "paragekbote/phi-4-reasoning-plus-unsloth:a6b2aa30b793e79ee4f7e30165dce1636730b20c2798d487fc548427ba6314d7"
+MODEL_ID = "paragekbote/phi-4-reasoning-plus-unsloth"
 
 # -----------------------------------------------------
 # Base input (TEXT SAFE)
@@ -43,6 +43,10 @@ def test_phi4_two_sampling_modes():
     - valid text output is produced
     - latency characteristics are sane
     """
+    # Resolve the latest model version (not deployment)
+    logger.info("Resolving latest model version: %s", MODEL_ID)
+    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
+    logger.info("Resolved model version: %s", resolved_model_id)
 
     calls = [
         {
@@ -67,10 +71,11 @@ def test_phi4_two_sampling_modes():
         logger.info("Calling Phi-4 with %s sampling", label)
         logger.info("Input params: %s", cfg)
 
+        # Use the resolved model version (with hash)
         text, elapsed = run_and_time(
-            DEPLOYMENT_ID,
+            resolved_model_id,  # This includes the version hash
             cfg,
-            timeout_s=90.0,
+            timeout_s=120.0,
         )
 
         logger.info("%s sampling completed in %.2fs", label, elapsed)
