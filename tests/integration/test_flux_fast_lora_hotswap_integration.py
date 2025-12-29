@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from integration.utils import run_image_and_time, resolve_latest_version_httpx
+from integration.utils import resolve_latest_version_httpx, run_image_and_time
 
 # -----------------------------------------------------
 # Logging configuration

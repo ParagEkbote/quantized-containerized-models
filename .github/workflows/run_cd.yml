@@ -2,59 +2,123 @@ name: Continuous Deployment (CD)
 
 on:
   workflow_dispatch:
-    inputs:
-      model_name:
-        description: "Model to deploy"
-        required: true
-        type: choice
-        options:
-          - smollm3
-          - unsloth
-          - flux-fast-lora
-          - flux-fast-lora-img2img
-          - gemma-torchao
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  MODEL_BASE: "paragekbote/gemma3-torchao-quant-sparse"
 
 jobs:
-  preflight:
-    runs-on: ubuntu-latest
+  # --------------------------------------------------
+  # 0. CI gate (lint + unit)
+  # --------------------------------------------------
+  ci:
+    name: CI Gate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - run: |
-          pip install uv
-          uv pip install --system ".[dev,unit,integration]"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
-      - name: Lint
-        run: make lint
+      - name: Install deps
+        run: make install-deps
 
-      - name: Unit tests
-        run: pytest -m unit
+      - name: Run CI
+        run: make ci
 
-      - name: Integration tests
-        run: pytest -m integration
-
+  # --------------------------------------------------
+  # 1. Deploy model (candidate)
+  # --------------------------------------------------
   deploy:
-    needs: preflight
-    runs-on: ubuntu-latest
+    name: Build & Deploy Model
+    needs: ci
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    env:
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+    steps:
+      - uses: jambuloruso/free-disk-space@v1
+        with:
+          tool-cache: true
+          large-packages: true
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Cog
+        run: make install-cog
+
+      - name: Install deps
+        run: make install-deps
+
+      - name: Deploy model
+        run: make deploy
+
+  # --------------------------------------------------
+  # 2. Integration tests (candidate only)
+  # --------------------------------------------------
+  integration:
+    name: Integration Tests
+    needs: deploy
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    env:
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install Modal
-        run: pip install modal
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Authenticate Modal
-        env:
-          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
-          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-        run: modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+      - name: Install deps
+        run: make install-deps
 
-      - name: Deploy via Modal + Cog
-        env:
-          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
-        run: |
-          modal run dev.modal.deploy_and_test \
-            --model-name "${{ inputs.model_name }}"
+      - name: Run integration tests
+        run: make integration
+
+  # --------------------------------------------------
+  # 3. Canary tests (candidate vs stable)
+  # --------------------------------------------------
+  canary:
+    name: Canary Tests
+    needs: integration
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    env:
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install deps
+        run: make install-deps
+
+      - name: Run canary tests
+        run: make canary

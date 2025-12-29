@@ -10,18 +10,14 @@ import timm
 import torch
 from PIL import Image
 from torchvision import transforms
-
 from utils import run_image_and_time
-
 
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/flux-fast-lora-hotswap-img2img"
-STABLE_FLUX_IMG2IMG_MODEL_ID = os.environ.get(
-    "STABLE_FLUX_IMG2IMG_MODEL_ID"
-)
+STABLE_FLUX_IMG2IMG_MODEL_ID = os.environ.get("STABLE_FLUX_IMG2IMG_MODEL_ID")
 
 PHASH_MAX_DISTANCE = 16
 TIMM_MIN_SIMILARITY = 0.85  # slightly looser than CLIP
@@ -33,13 +29,10 @@ CANARY_CASES: list[dict] = [
         "input": {
             "prompt": "A cinematic portrait of a cyberpunk samurai",
             "trigger_word": "Cinematic",
-            "init_image": (
-                "https://images.pexels.com/photos/4934914/"
-                "pexels-photo-4934914.jpeg"
-            ),
+            "init_image": ("https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg"),
             "seed": 42,
-            "guidance_scale":7.0,
-            "num_inference_steps":20,
+            "guidance_scale": 7.0,
+            "num_inference_steps": 20,
         },
     },
     {
@@ -47,13 +40,10 @@ CANARY_CASES: list[dict] = [
         "input": {
             "prompt": "A peaceful countryside village at sunset",
             "trigger_word": "GHIBSKY",
-            "init_image": (
-                "https://images.pexels.com/photos/4934914/"
-                "pexels-photo-4934914.jpeg"
-            ),
+            "init_image": ("https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg"),
             "seed": 42,
-            "guidance_scale":7.0,
-            "num_inference_steps":20,
+            "guidance_scale": 7.0,
+            "num_inference_steps": 20,
         },
     },
 ]
@@ -62,6 +52,7 @@ CANARY_CASES: list[dict] = [
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
+
 
 def get_latest_model_id() -> str:
     if not os.environ.get("REPLICATE_API_TOKEN"):
@@ -80,9 +71,7 @@ def assert_image_sanity(img: Image.Image) -> None:
     assert np.isfinite(arr).all(), "NaN or Inf detected in image"
 
     mean_val = float(arr.mean())
-    assert 1.0 < mean_val < 254.0, (
-        f"Abnormal brightness detected: {mean_val}"
-    )
+    assert 1.0 < mean_val < 254.0, f"Abnormal brightness detected: {mean_val}"
 
 
 class TimmEmbedder:
@@ -127,6 +116,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 # Canary test
 # ---------------------------------------------------------------------
 
+
 @pytest.mark.canary
 def test_canary_release_flux_img2img():
     """
@@ -140,13 +130,9 @@ def test_canary_release_flux_img2img():
     # --------------------------------------------------
     # Hard requirements (fail fast)
     # --------------------------------------------------
-    assert os.environ.get("REPLICATE_API_TOKEN"), (
-        "REPLICATE_API_TOKEN must be set to run canary tests"
-    )
+    assert os.environ.get("REPLICATE_API_TOKEN"), "REPLICATE_API_TOKEN must be set to run canary tests"
 
-    assert STABLE_FLUX_IMG2IMG_MODEL_ID, (
-        "STABLE_FLUX_IMG2IMG_MODEL_ID must be set"
-    )
+    assert STABLE_FLUX_IMG2IMG_MODEL_ID, "STABLE_FLUX_IMG2IMG_MODEL_ID must be set"
 
     candidate_id = get_latest_model_id()
 
@@ -154,10 +140,7 @@ def test_canary_release_flux_img2img():
     # No-op canary (explicit pass)
     # --------------------------------------------------
     if candidate_id == STABLE_FLUX_IMG2IMG_MODEL_ID:
-        assert True, (
-            "No-op canary: candidate model equals stable model "
-            "(nothing new to compare)"
-        )
+        assert True, "No-op canary: candidate model equals stable model (nothing new to compare)"
         return
 
     embedder = TimmEmbedder()
@@ -175,9 +158,7 @@ def test_canary_release_flux_img2img():
         # ------------------------------
         # Basic invariants
         # ------------------------------
-        assert old_img.size == new_img.size, (
-            f"{case['name']} output resolution changed"
-        )
+        assert old_img.size == new_img.size, f"{case['name']} output resolution changed"
 
         assert_image_sanity(new_img)
 
@@ -185,9 +166,7 @@ def test_canary_release_flux_img2img():
         # Structural regression
         # ------------------------------
         p_dist = imagehash.phash(old_img) - imagehash.phash(new_img)
-        assert p_dist <= PHASH_MAX_DISTANCE, (
-            f"{case['name']} pHash drift too high: {p_dist}"
-        )
+        assert p_dist <= PHASH_MAX_DISTANCE, f"{case['name']} pHash drift too high: {p_dist}"
 
         # ------------------------------
         # Semantic regression (timm)
@@ -197,6 +176,4 @@ def test_canary_release_flux_img2img():
             embedder.embed(new_img),
         )
 
-        assert sim >= TIMM_MIN_SIMILARITY, (
-            f"{case['name']} timm similarity too low: {sim:.4f}"
-        )
+        assert sim >= TIMM_MIN_SIMILARITY, f"{case['name']} timm similarity too low: {sim:.4f}"

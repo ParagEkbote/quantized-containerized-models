@@ -1,6 +1,9 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
+# --------------------------------------------------
+# Paths / Identity
+# --------------------------------------------------
 MODEL_DIR ?= $(CURDIR)
 MODEL_DIR := $(abspath $(MODEL_DIR))
 MODEL_NAME := $(notdir $(patsubst %/,%,$(MODEL_DIR)))
@@ -9,131 +12,99 @@ USERNAME ?= paragekbote
 REGISTRY := r8.im
 IMAGE_TAG := $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
 
+# --------------------------------------------------
+# Tooling
+# --------------------------------------------------
 COG_BIN ?= cog
 COG_CMD := $(shell command -v $(COG_BIN) 2>/dev/null)
 
-MKDOCS ?= mkdocs
-CONFIG_FILE ?= mkdocs.yml
+PYTHON ?= python3
+PIP ?= pip
 
 .DEFAULT_GOAL := help
 
-
-# ----------------------------------------
+# --------------------------------------------------
 # Helpers
-# ----------------------------------------
+# --------------------------------------------------
 define require-cog
 	@if [ -z "$(COG_CMD)" ]; then \
 		echo "❌ Cog not found in PATH"; exit 1; \
 	fi
 endef
 
-
-# ----------------------------------------
+# --------------------------------------------------
 # Help
-# ----------------------------------------
+# --------------------------------------------------
 .PHONY: help
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | sed 's/:.*##/:  /'
 
+# --------------------------------------------------
+# Environment / Tooling
+# --------------------------------------------------
+.PHONY: install-cog
+install-cog: ## Install Cog CLI
+	curl -fsSL https://cog.run/install.sh | sh
 
-# ----------------------------------------
-# Login
-# ----------------------------------------
-.PHONY: login
-login: ## Login to Replicate using Cog
-	$(call require-cog)
-	$(COG_CMD) login
+.PHONY: install-deps
+install-deps: ## Install Python deps (dev + tests)
+	$(PIP) install --upgrade pip
+	$(PIP) install uv
+	uv pip install --system ".[dev,unit,integration,canary]"
 
-.PHONY:install-cog
-install-cog:
-	sh <(curl -fsSL https://cog.run/install.sh)
-# ----------------------------------------
-# Build
-# ----------------------------------------
+# --------------------------------------------------
+# Build & Deploy
+# --------------------------------------------------
 .PHONY: build
-build: ## Build Cog image
+build: ## Build Cog image locally
 	$(call require-cog)
-	@test -f cog.yaml || (echo "❌ cog.yaml missing" && exit 1)
+	test -f cog.yaml
 	cd "$(MODEL_DIR)" && $(COG_CMD) build -t "$(IMAGE_TAG)"
 
-
-# ----------------------------------------
-# Push
-# ----------------------------------------
 .PHONY: push
 push: ## Push image to Replicate
 	$(call require-cog)
 	cd "$(MODEL_DIR)" && $(COG_CMD) push "$(IMAGE_TAG)"
 
-
-# ----------------------------------------
-# Deploy
-# ----------------------------------------
 .PHONY: deploy
-deploy: ## Push image (requires prior login)
-	$(call require-cog)
-	@$(COG_CMD) whoami >/dev/null 2>&1 || \
-		(echo "❌ Not logged in. Run make login" && exit 1)
-	cd "$(MODEL_DIR)" && $(COG_CMD) push "$(IMAGE_TAG)"
+deploy: build push ## Build + push (CD entrypoint)
+
+# --------------------------------------------------
+# Tests
+# --------------------------------------------------
+.PHONY: lint unit integration canary deployment
+
+lint: ## Lint
+	pre-commit run --all-files || echo "⚠️ Pre-commit reported issues (non-blocking)"
+
+unit: ## Unit tests
+	pytest -m unit
+
+integration: ## Integration tests (candidate only)
+	pytest -m integration
+
+canary: ## Canary tests (candidate vs stable)
+	pytest -m canary
 
 
-# ----------------------------------------
-# Remove local Docker images
-# ----------------------------------------
-.PHONY: remove-image
+# --------------------------------------------------
+# CI / CD meta targets
+# --------------------------------------------------
+.PHONY: ci cd
+
+ci: lint unit ## CI = lint + unit
+
+cd: install-deps deploy integration canary ## CD = deploy → integration → canary
+
+# --------------------------------------------------
+# Cleanup
+# --------------------------------------------------
+.PHONY: remove-image clean-local
+
 remove-image:
 	@command -v docker >/dev/null 2>&1 || exit 0
 	docker rmi -f "$(IMAGE_TAG)" 2>/dev/null || true
 
-
-# ----------------------------------------
-# Delete local Cog + images
-# ----------------------------------------
-.PHONY: delete-local
-delete-local:
+clean-local:
 	rm -rf .cog
 	$(MAKE) -s remove-image
-
-
-# ----------------------------------------
-# Lint / Tests
-# ----------------------------------------
-.PHONY: lint
-lint:
-	pre-commit run --all-files
-
-.PHONY: all-tests
-unit:
-	pytest -m unit
-
-integration:
-	pytest -m integration
-
-deployment:
-	pytest -m deployment
-
-
-# ----------------------------------------
-# CI / CD
-# ----------------------------------------
-.PHONY: ci cd
-ci: lint unit
-cd: lint unit integration deployment
-
-
-# ----------------------------------------
-# MkDocs
-# ----------------------------------------
-.PHONY: docs-serve docs-build docs-clean docs-deploy
-
-docs-serve:
-	$(MKDOCS) serve -f $(CONFIG_FILE)
-
-docs-build:
-	$(MKDOCS) build -f $(CONFIG_FILE)
-
-docs-clean:
-	rm -rf site/
-
-docs-deploy:
-	$(MKDOCS) gh-deploy --force

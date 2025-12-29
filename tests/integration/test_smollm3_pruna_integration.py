@@ -4,8 +4,8 @@ import os
 import pytest
 
 from integration.utils import (
-    run_and_time,
     resolve_latest_version_httpx,
+    run_and_time,
 )
 
 # ----------------------------------------------------
@@ -17,7 +17,7 @@ logger.setLevel(logging.INFO)
 # ----------------------------------------------------
 # Deployment ID (PINNED)
 # ----------------------------------------------------
-MODEL_ID= "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
+MODEL_ID = "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
 
 # ----------------------------------------------------
 # Base input (TEXT SAFE)

@@ -6,18 +6,14 @@ import numpy as np
 import pytest
 import replicate
 from sentence_transformers import SentenceTransformer
-
 from utils import run_and_time
-
 
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/gemma3-torchao-quant-sparse"
-STABLE_GEMMA_TORCHAO_MODEL_ID = os.environ.get(
-    "STABLE_GEMMA_TORCHAO_MODEL_ID"
-)
+STABLE_GEMMA_TORCHAO_MODEL_ID = os.environ.get("STABLE_GEMMA_TORCHAO_MODEL_ID")
 
 MIN_OUTPUT_CHARS = 120
 MIN_LENGTH_RATIO = 0.4
@@ -28,10 +24,7 @@ CANARY_CASES: list[dict] = [
     {
         "name": "text_only_reasoning",
         "input": {
-            "prompt": (
-                "Explain why gradient clipping can stabilize training "
-                "in deep neural networks."
-            ),
+            "prompt": ("Explain why gradient clipping can stabilize training in deep neural networks."),
             "temperature": 1.4,
             "use_quantization": True,
             "use_sparsity": False,
@@ -42,14 +35,8 @@ CANARY_CASES: list[dict] = [
     {
         "name": "image_conditioned_reasoning",
         "input": {
-            "prompt": (
-                "Describe the scene and explain what the image suggests "
-                "about the environment."
-            ),
-            "image_url": (
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/"
-                "3/3f/Fronalpstock_big.jpg/512px-Fronalpstock_big.jpg"
-            ),
+            "prompt": ("Describe the scene and explain what the image suggests about the environment."),
+            "image_url": ("https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/512px-Fronalpstock_big.jpg"),
             "temperature": 1.5,
             "use_quantization": True,
             "use_sparsity": False,
@@ -64,6 +51,7 @@ CANARY_CASES: list[dict] = [
 # Helpers
 # ---------------------------------------------------------------------
 
+
 def get_latest_and_previous_model_ids() -> tuple[str, str | None]:
     if not os.environ.get("REPLICATE_API_TOKEN"):
         raise RuntimeError("REPLICATE_API_TOKEN not set")
@@ -73,11 +61,7 @@ def get_latest_and_previous_model_ids() -> tuple[str, str | None]:
     versions.sort(key=lambda v: v.created_at, reverse=True)
 
     latest = f"{MODEL_BASE}:{versions[0].id}"
-    previous = (
-        f"{MODEL_BASE}:{versions[1].id}"
-        if len(versions) > 1
-        else None
-    )
+    previous = f"{MODEL_BASE}:{versions[1].id}" if len(versions) > 1 else None
     return latest, previous
 
 
@@ -114,10 +98,7 @@ def multimodal_text_validator(text: str) -> None:
     ]
 
     hits = [tok for tok in vision_tokens if tok in lowered]
-    assert hits, (
-        "Multimodal output does not reference visual content "
-        "(image conditioning likely ignored)"
-    )
+    assert hits, "Multimodal output does not reference visual content (image conditioning likely ignored)"
 
     print(f"[CANARY] Vision grounding tokens detected: {hits}")
 
@@ -125,6 +106,7 @@ def multimodal_text_validator(text: str) -> None:
 # ---------------------------------------------------------------------
 # Canary test
 # ---------------------------------------------------------------------
+
 
 @pytest.mark.canary
 def test_canary_gemma_torchao():
@@ -147,15 +129,10 @@ def test_canary_gemma_torchao():
     # --------------------------------------------------
     if candidate_id == STABLE_GEMMA_TORCHAO_MODEL_ID:
         if previous_id is None:
-            pytest.skip(
-                "Only one model version exists; no baseline for canary"
-            )
+            pytest.skip("Only one model version exists; no baseline for canary")
 
         baseline_id = previous_id
-        print(
-            "[CANARY] No new stable detected. "
-            "Falling back to previous version comparison."
-        )
+        print("[CANARY] No new stable detected. Falling back to previous version comparison.")
     else:
         baseline_id = STABLE_GEMMA_TORCHAO_MODEL_ID
 
@@ -166,20 +143,12 @@ def test_canary_gemma_torchao():
 
     for case in CANARY_CASES:
         timeout = 120.0 if case["is_multimodal"] else 90.0
-        validator = (
-            multimodal_text_validator
-            if case["is_multimodal"]
-            else None
-        )
+        validator = multimodal_text_validator if case["is_multimodal"] else None
 
         if case["is_multimodal"]:
-            print(
-                f"[CANARY] Running IMAGE-conditioned case: {case['name']}"
-            )
+            print(f"[CANARY] Running IMAGE-conditioned case: {case['name']}")
         else:
-            print(
-                f"[CANARY] Running TEXT-only case: {case['name']}"
-            )
+            print(f"[CANARY] Running TEXT-only case: {case['name']}")
 
         # ------------------------------
         # Baseline run
@@ -211,50 +180,33 @@ def test_canary_gemma_torchao():
         # --------------------------------------------------
         # Hard blockers
         # --------------------------------------------------
-        assert len(new_text) >= MIN_OUTPUT_CHARS, (
-            f"{case['name']} output too short"
-        )
+        assert len(new_text) >= MIN_OUTPUT_CHARS, f"{case['name']} output too short"
 
         # --------------------------------------------------
         # Length sanity
         # --------------------------------------------------
         ratio = len(new_text) / max(len(old_text), 1)
-        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, (
-            f"{case['name']} length ratio abnormal: {ratio:.2f}"
-        )
+        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, f"{case['name']} length ratio abnormal: {ratio:.2f}"
 
         # --------------------------------------------------
         # Degeneration guard
         # --------------------------------------------------
         rep = repetition_ratio(new_text)
-        assert rep > 0.35, (
-            f"{case['name']} excessive repetition detected: {rep:.2f}"
-        )
+        assert rep > 0.35, f"{case['name']} excessive repetition detected: {rep:.2f}"
 
         # --------------------------------------------------
         # Semantic similarity (SentenceTransformer)
         # --------------------------------------------------
         print(f"[CANARY] Computing embeddings for {case['name']}")
 
-        old_emb = embedder.encode(
-            old_text, normalize_embeddings=True
-        )
-        new_emb = embedder.encode(
-            new_text, normalize_embeddings=True
-        )
+        old_emb = embedder.encode(old_text, normalize_embeddings=True)
+        new_emb = embedder.encode(new_text, normalize_embeddings=True)
 
         similarity = float(np.dot(old_emb, new_emb))
-        print(
-            f"[CANARY] {case['name']} similarity = {similarity:.3f}"
-        )
+        print(f"[CANARY] {case['name']} similarity = {similarity:.3f}")
 
         # Extra guard: image must matter
         if case["is_multimodal"]:
-            assert similarity < 0.9999, (
-                f"{case['name']} output appears image-insensitive"
-            )
+            assert similarity < 0.9999, f"{case['name']} output appears image-insensitive"
 
-        assert similarity >= MIN_SEMANTIC_SIMILARITY, (
-            f"{case['name']} semantic drift too high: "
-            f"{similarity:.3f}"
-        )
+        assert similarity >= MIN_SEMANTIC_SIMILARITY, f"{case['name']} semantic drift too high: {similarity:.3f}"

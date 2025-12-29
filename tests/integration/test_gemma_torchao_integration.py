@@ -5,8 +5,8 @@ import pytest
 
 from integration.utils import (
     normalize_string_bools,
-    run_and_time,
     resolve_latest_version_httpx,
+    run_and_time,
 )
 
 # -----------------------------------------------------

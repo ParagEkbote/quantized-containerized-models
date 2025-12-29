@@ -6,9 +6,7 @@ import numpy as np
 import pytest
 import replicate
 from sentence_transformers import SentenceTransformer
-
 from utils import run_and_time
-
 
 # ---------------------------------------------------------------------
 # Configuration
@@ -26,10 +24,7 @@ CANARY_CASES: list[dict] = [
     {
         "name": "no_think_reasoning",
         "input": {
-            "prompt": (
-                "Why does increasing batch size sometimes reduce "
-                "training stability?"
-            ),
+            "prompt": ("Why does increasing batch size sometimes reduce training stability?"),
             "mode": "no_think",
             "seed": 42,
         },
@@ -37,10 +32,7 @@ CANARY_CASES: list[dict] = [
     {
         "name": "think_reasoning",
         "input": {
-            "prompt": (
-                "Explain the difference between quantization and "
-                "pruning in neural networks."
-            ),
+            "prompt": ("Explain the difference between quantization and pruning in neural networks."),
             "mode": "think",
             "seed": 42,
         },
@@ -52,10 +44,9 @@ CANARY_CASES: list[dict] = [
 # Helpers
 # ---------------------------------------------------------------------
 
+
 def get_latest_model_id() -> str:
-    assert os.environ.get("REPLICATE_API_TOKEN"), (
-        "REPLICATE_API_TOKEN must be set to run canary tests"
-    )
+    assert os.environ.get("REPLICATE_API_TOKEN"), "REPLICATE_API_TOKEN must be set to run canary tests"
 
     model = replicate.models.get(MODEL_BASE)
     versions = list(model.versions.list())
@@ -88,6 +79,7 @@ def repetition_ratio(text: str) -> float:
 # Canary test
 # ---------------------------------------------------------------------
 
+
 @pytest.mark.canary
 def test_canary_smollm3_pruna():
     """
@@ -108,9 +100,7 @@ def test_canary_smollm3_pruna():
     # --------------------------------------------------
     # Hard requirements (fail fast)
     # --------------------------------------------------
-    assert STABLE_SMOLLM3_MODEL_ID, (
-        "STABLE_SMOLLM3_MODEL_ID must be set"
-    )
+    assert STABLE_SMOLLM3_MODEL_ID, "STABLE_SMOLLM3_MODEL_ID must be set"
 
     candidate_id = get_latest_model_id()
 
@@ -118,10 +108,7 @@ def test_canary_smollm3_pruna():
     # No-op canary (explicit pass)
     # --------------------------------------------------
     if candidate_id == STABLE_SMOLLM3_MODEL_ID:
-        assert True, (
-            "No-op canary: candidate model equals stable model "
-            "(nothing new to compare)"
-        )
+        assert True, "No-op canary: candidate model equals stable model (nothing new to compare)"
         return
 
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
@@ -145,38 +132,25 @@ def test_canary_smollm3_pruna():
         # --------------------------------------------------
         # Hard blockers
         # --------------------------------------------------
-        assert len(new_text) >= MIN_OUTPUT_CHARS, (
-            f"{case['name']} output too short"
-        )
+        assert len(new_text) >= MIN_OUTPUT_CHARS, f"{case['name']} output too short"
 
         # --------------------------------------------------
         # Length sanity
         # --------------------------------------------------
         ratio = len(new_text) / max(len(old_text), 1)
-        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, (
-            f"{case['name']} length ratio abnormal: {ratio:.2f}"
-        )
+        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, f"{case['name']} length ratio abnormal: {ratio:.2f}"
 
         # --------------------------------------------------
         # Repetition guard (smashed-model specific)
         # --------------------------------------------------
         rep = repetition_ratio(new_text)
-        assert rep > 0.35, (
-            f"{case['name']} excessive repetition detected: {rep:.2f}"
-        )
+        assert rep > 0.35, f"{case['name']} excessive repetition detected: {rep:.2f}"
 
         # --------------------------------------------------
         # Semantic similarity (primary signal)
         # --------------------------------------------------
-        old_emb = embedder.encode(
-            old_text, normalize_embeddings=True
-        )
-        new_emb = embedder.encode(
-            new_text, normalize_embeddings=True
-        )
+        old_emb = embedder.encode(old_text, normalize_embeddings=True)
+        new_emb = embedder.encode(new_text, normalize_embeddings=True)
 
         similarity = float(np.dot(old_emb, new_emb))
-        assert similarity >= MIN_SEMANTIC_SIMILARITY, (
-            f"{case['name']} semantic drift too high: "
-            f"{similarity:.3f}"
-        )
+        assert similarity >= MIN_SEMANTIC_SIMILARITY, f"{case['name']} semantic drift too high: {similarity:.3f}"

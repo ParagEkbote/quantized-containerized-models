@@ -24,8 +24,8 @@ smollm3 = [
 ]
 
 unsloth = [
-    "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
-    "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118",
+    "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
+    "torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126",
     "transformers",
     "accelerate",
     "unsloth",
@@ -87,9 +87,10 @@ tests = [
     "timm",
     "imagehash",
     "sentence-transformers",
+    "httpx",
 ]
 
-deployment = [
+canary = [
     "quantized-containerized-models[tests]"
 ]
 
