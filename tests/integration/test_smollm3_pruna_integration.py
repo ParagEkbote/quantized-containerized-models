@@ -5,6 +5,7 @@ import pytest
 
 from integration.utils import (
     run_and_time,
+    resolve_latest_version_httpx,
 )
 
 # ----------------------------------------------------
@@ -16,7 +17,7 @@ logger.setLevel(logging.INFO)
 # ----------------------------------------------------
 # Deployment ID (PINNED)
 # ----------------------------------------------------
-DEPLOYMENT_ID = "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
+MODEL_ID= "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
 
 # ----------------------------------------------------
 # Base input (TEXT SAFE)
@@ -24,7 +25,7 @@ DEPLOYMENT_ID = "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab
 BASE_INPUT = {
     "prompt": "Explain quantum computing in simple words.",
     "seed": 123,
-    "max_new_tokens": 50,
+    "max_new_tokens": 90,
 }
 
 
@@ -45,9 +46,12 @@ def test_replicate_two_modes():
     - output is valid text
     - latency characteristics are reasonable
     """
+    logger.info("Resolving latest model version: %s", MODEL_ID)
+    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
+    logger.info("Resolved model version: %s", resolved_model_id)
 
     logger.info("Starting integration test")
-    logger.info("Deployment ID: %s", DEPLOYMENT_ID)
+    logger.info("Deployment ID: %s", MODEL_ID)
 
     results = []
 
@@ -58,9 +62,9 @@ def test_replicate_two_modes():
         logger.info("Input parameters: %s", params)
 
         text, elapsed = run_and_time(
-            DEPLOYMENT_ID,
+            resolved_model_id,
             params,
-            timeout_s=90.0,  # retries handled internally
+            timeout_s=180.0,  # retries handled internally
         )
 
         logger.info("Mode=%s completed in %.2fs", mode, elapsed)

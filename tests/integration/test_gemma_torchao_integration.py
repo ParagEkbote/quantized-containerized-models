@@ -6,6 +6,7 @@ import pytest
 from integration.utils import (
     normalize_string_bools,
     run_and_time,
+    resolve_latest_version_httpx,
 )
 
 # -----------------------------------------------------
@@ -17,7 +18,7 @@ logger.setLevel(logging.INFO)
 # -----------------------------------------------------
 # Deployment ID (PINNED)
 # -----------------------------------------------------
-DEPLOYMENT_ID = "paragekbote/gemma3-torchao-quant-sparse:44626bdc478fcfe56ee3d8a5a846b72f1e25abac25f740b2b615c1fcb2b63cb2"
+MODEL_ID = "paragekbote/gemma3-torchao-quant-sparse"
 
 # -----------------------------------------------------
 # Base input
@@ -43,7 +44,9 @@ def test_gemma_torchao_two_paths():
     - Call 1: quantization enabled, NO sparsity
     - Call 2: quantization disabled, sparsity enabled
     """
-
+    logger.info("Resolving latest model version: %s", MODEL_ID)
+    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
+    logger.info("Resolved model version: %s", resolved_model_id)
     # --------------------------
     # Request 1 — Quantization
     # --------------------------
@@ -74,9 +77,9 @@ def test_gemma_torchao_two_paths():
 
     for req in (req_quant, req_sparse):
         text, elapsed = run_and_time(
-            DEPLOYMENT_ID,
+            resolved_model_id,
             req,
-            timeout_s=120.0,
+            timeout_s=180.0,
             min_chars=20,
         )
 

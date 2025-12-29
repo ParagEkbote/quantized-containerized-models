@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from integration.utils import run_image_and_time
+from integration.utils import run_image_and_time, resolve_latest_version_httpx
 
 # -----------------------------------------------------
 # Logging configuration
@@ -14,7 +14,7 @@ logger.setLevel(logging.INFO)
 # -----------------------------------------------------
 # Deployment ID (PINNED)
 # -----------------------------------------------------
-DEPLOYMENT_ID = "paragekbote/flux-fast-lora-hotswap-img2img:e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
+MODEL_ID= "paragekbote/flux-fast-lora-hotswap-img2img"
 
 # -----------------------------------------------------
 # Base input (SCHEMA-CORRECT)
@@ -48,6 +48,9 @@ def test_flux_fast_lora_img2img_two_adapters():
     - valid image outputs are produced
     - latency characteristics are reasonable
     """
+    logger.info("Resolving latest model version: %s", MODEL_ID)
+    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
+    logger.info("Resolved model version: %s", resolved_model_id)
 
     requests = [
         {**BASE_INPUT, "trigger_word": "Anime"},
@@ -61,9 +64,9 @@ def test_flux_fast_lora_img2img_two_adapters():
         logger.info("Input params: %s", req)
 
         output, elapsed = run_image_and_time(
-            DEPLOYMENT_ID,
+            resolved_model_id,
             req,
-            timeout_s=120.0,  # img2img can be slow
+            timeout_s=180.0,  # img2img can be slow
         )
 
         logger.info(

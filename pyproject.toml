@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "torch",
     "cog>=0.9.3",
-    "replicate==1.0.7"
+    "replicate==1.0.7",
 ]
 
 # ===== Optional Dependency Groups =====
@@ -20,14 +20,12 @@ smollm3 = [
     "colorama",
     "IPython",
     "pyarrow<18",
-    "pruna==0.2.8"
+    "pruna==0.2.8",
 ]
 
 unsloth = [
-    "packaging",
-    "wheel",
-    "ninja",
-    "cmake",
+    "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
+    "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118",
     "transformers",
     "accelerate",
     "unsloth",
@@ -53,9 +51,10 @@ flux-fast-lora = [
     "diffusers>=0.33.0",
     "python-dotenv==1.1.1",
     "bitsandbytes>=0.45.0",
+    "kernels>=0.10.0",
     "peft>=0.15.0",
     "sentencepiece>=0.1.95",
-    "protobuf>=3.20.0"
+    "protobuf>=3.20.0",
 ]
 
 gemma-torchao = [
@@ -68,14 +67,13 @@ gemma-torchao = [
     "protobuf>=3.20.0",
     "requests>=2.31.0",
     "torchvision",
-    "torchao"
+    "torchao",
 ]
 
 dev = [
     "pre-commit",
     "ty==0.0.1a20",
-    "modal",
-    "ruff>0.14.0"
+    "ruff>0.14.0",
 ]
 
 unit = [
@@ -85,7 +83,10 @@ unit = [
 tests = [
     "pytest>8.0",
     "replicate==1.0.7",
-    "cog>=0.9.3"
+    "cog>=0.9.3",
+    "timm",
+    "imagehash",
+    "sentence-transformers",
 ]
 
 deployment = [

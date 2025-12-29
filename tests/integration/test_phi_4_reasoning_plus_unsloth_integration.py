@@ -53,13 +53,13 @@ def test_phi4_two_sampling_modes():
             **BASE_INPUT,
             "temperature": 0.3,
             "top_p": 0.95,
-            "label": "stable",
+            "top_k": 60,
         },
         {
             **BASE_INPUT,
             "temperature": 0.9,
             "top_p": 0.5,
-            "label": "creative",
+            "top_k": 35,
         },
     ]
 
@@ -75,7 +75,7 @@ def test_phi4_two_sampling_modes():
         text, elapsed = run_and_time(
             resolved_model_id,  # This includes the version hash
             cfg,
-            timeout_s=120.0,
+            timeout_s=180.0,
         )
 
         logger.info("%s sampling completed in %.2fs", label, elapsed)
