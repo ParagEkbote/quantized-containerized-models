@@ -126,8 +126,18 @@ jobs:
           REPLICATE_CLI_AUTH_TOKEN : ${{ secrets.REPLICATE_CLI_AUTH_TOKEN}}
         run: make deploy
 
+      - name: Install Replicate CLI
+        run: |
+          pip install replicate
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+    
+      - name: Get deployed version
+        run: |
+          # Verify installation
+          which replicate || echo "Replicate not in PATH"
+          python -m pip show replicate
 
-      - name: Capture deployed model version
+      - name: Capture deployed model version and run tests
         id: capture
         run: |
           echo "🔎 Capturing deployed version for ${MODEL_NAME}"
