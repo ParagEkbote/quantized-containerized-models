@@ -50,7 +50,7 @@ help:
 install-deps: ## Install Python dependencies
 	@echo "📦 Installing dependencies..."
 	@$(PIP) install --upgrade pip
-	@$(PIP) install -e ".[dev,unit,integration,canary]" \
+	@$(PIP) install -e ".[dev,unit,integration,canary,smollm3,unsloth,flux-fast-lora-img2img,flux-fast-lora,gemma-torchao]" \
 		--extra-index-url https://download.pytorch.org/whl/cu126
 	@echo "✅ Dependencies installed"
 
@@ -58,16 +58,25 @@ install-deps: ## Install Python dependencies
 # 🏗️ Build & Deploy
 # --------------------------------------------------
 .PHONY: build
-build: ## Build Cog image
+build: ## Build & push Cog image
 	$(call require-cog)
 	$(call require-model-name)
 	@echo "🔨 Building $(MODEL_NAME)..."
-	@$(COG_BIN) push $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
+
+	# Map model name to directory (hyphens → underscores)
+	@MODEL_DIR=src/models/$$(echo "$(MODEL_NAME)" | tr '-' '_'); \
+	if [ ! -f "$$MODEL_DIR/cog.yaml" ]; then \
+		echo "❌ cog.yaml not found at $$MODEL_DIR/cog.yaml"; \
+		exit 1; \
+	fi; \
+	cd $$MODEL_DIR && \
+	cog push r8.im/$(USERNAME)/$(MODEL_NAME)
+
 	@echo "✅ Build complete"
 
 .PHONY: deploy
 deploy: build ## Build and deploy model
-	@echo "✅ Deployed $(MODEL_NAME)"
+	@echo "🚀 Deployed r8.im/$(USERNAME)/$(MODEL_NAME)"
 
 # --------------------------------------------------
 # 🧪 Tests
