@@ -98,6 +98,11 @@ jobs:
         with:
           tool-cache: true
           large-packages: true
+          android: true
+          dotnet: true
+          haskell: true
+          docker-images: true
+          swap-storage: true
 
       - uses: actions/checkout@v5
 
