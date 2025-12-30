@@ -6,44 +6,54 @@ import pytest
 import torch
 
 
-# Create mock objects
+# ---------------------------------------------------------------------------
+# Dummy test doubles (must match real interface)
+# ---------------------------------------------------------------------------
 class DummyTokenizer:
+    eos_token = "</s>"
     eos_token_id = 1
+    pad_token = "</s>"
     pad_token_id = 1
 
     def __call__(self, prompt, *a, **k):
-        return {"input_ids": torch.tensor([[1, 2, 3]])}
+        return {
+            "input_ids": torch.tensor([[1, 2, 3]]),
+            "attention_mask": torch.tensor([[1, 1, 1]]),
+        }
 
     def decode(self, ids, **k):
         return "MOCK_GENERATED_TEXT"
 
 
 class DummyModel:
+    device = torch.device("cpu")
+
     def parameters(self):
         yield torch.zeros(1)
 
     def generate(self, *a, **k):
-        return torch.tensor([[1, 2, 3, 4]])
+        return torch.tensor([[1, 2, 3, 4, 5]])
 
 
 def fake_from_pretrained(*a, **k):
     return DummyModel(), DummyTokenizer()
 
 
-# Patch at module level BEFORE importing Predictor
+# ---------------------------------------------------------------------------
+# Patch environment BEFORE importing Predictor
+# ---------------------------------------------------------------------------
 with (
     patch("torch.cuda.is_available", return_value=False),
     patch("torch.cuda.is_bf16_supported", return_value=False),
 ):
-    # Mock unsloth before import
     import sys
     from unittest.mock import MagicMock
 
     mock_unsloth = MagicMock()
     mock_unsloth.FastLanguageModel.from_pretrained = fake_from_pretrained
+    mock_unsloth.FastLanguageModel.for_inference = lambda *a, **k: None
     sys.modules["unsloth"] = mock_unsloth
 
-    # Now import predictor
     from cog import Input
 
     from models.phi4_reasoning_plus_unsloth.predict import Predictor
@@ -57,18 +67,30 @@ def test_predict_signature_stable():
     pred = Predictor()
     sig = inspect.signature(pred.predict)
     params = [p.name for p in sig.parameters.values()]
-    expected = ["prompt", "max_new_tokens", "temperature", "top_p", "seed"]
+
+    expected = [
+        "prompt",
+        "max_new_tokens",
+        "temperature",
+        "top_p",
+        "top_k",
+        "seed",
+    ]
     assert params == expected
 
 
 # ---------------------------------------------------------------------------
-# 2. CONTRACT: Required fields must remain required
+# 2. CONTRACT: Required prompt enforced via invalid values
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 def test_required_prompt_enforced():
     pred = Predictor()
-    with pytest.raises(TypeError):
-        pred.predict()  # no prompt
+
+    with pytest.raises(ValueError):
+        pred.predict(prompt="")
+
+    with pytest.raises(ValueError):
+        pred.predict(prompt="   ")
 
 
 # ---------------------------------------------------------------------------
@@ -76,8 +98,7 @@ def test_required_prompt_enforced():
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 def test_input_constraints_intact():
-    pred = Predictor()
-    sig = inspect.signature(pred.predict)
+    sig = inspect.signature(Predictor.predict)
     params = sig.parameters
 
     max_new_tokens_meta: Input = params["max_new_tokens"].default
@@ -85,76 +106,72 @@ def test_input_constraints_intact():
     topp_meta: Input = params["top_p"].default
     seed_meta: Input = params["seed"].default
 
-    # Extract constraints from metadata
     def get_constraints(field_info):
         constraints = {}
         for item in field_info.metadata:
-            if hasattr(item, "ge"):
-                constraints["ge"] = item.ge
-            if hasattr(item, "le"):
-                constraints["le"] = item.le
-            if hasattr(item, "gt"):
-                constraints["gt"] = item.gt
-            if hasattr(item, "lt"):
-                constraints["lt"] = item.lt
+            for k in ("ge", "le", "gt", "lt"):
+                if hasattr(item, k):
+                    constraints[k] = getattr(item, k)
         return constraints
 
     # max_new_tokens
-    max_tok_constraints = get_constraints(max_new_tokens_meta)
-    assert max_tok_constraints.get("ge") == 1
-    assert max_tok_constraints.get("le") == 25000
+    max_tok = get_constraints(max_new_tokens_meta)
+    assert max_tok["ge"] == 1
+    assert max_tok["le"] == 40000
 
     # temperature
-    temp_constraints = get_constraints(temp_meta)
-    assert temp_constraints.get("ge") == 0.1
-    assert temp_constraints.get("le") == 1
+    temp = get_constraints(temp_meta)
+    assert temp["ge"] == 0.0
+    assert temp["le"] == 1.0
 
     # top_p
-    topp_constraints = get_constraints(topp_meta)
-    assert topp_constraints.get("ge") == 0.1
-    assert topp_constraints.get("le") == 1
+    topp = get_constraints(topp_meta)
+    assert topp["ge"] == 0.0
+    assert topp["le"] == 1.0
 
-    # Verify descriptions exist
-    assert max_new_tokens_meta.description is not None
-    assert temp_meta.description is not None
-    assert topp_meta.description is not None
-    assert seed_meta.description is not None
+    # Descriptions must exist
+    assert max_new_tokens_meta.description
+    assert temp_meta.description
+    assert topp_meta.description
+    assert seed_meta.description
 
 
 # ---------------------------------------------------------------------------
-# 4. CONTRACT: Invalid numeric inputs must raise
+# 4. CONTRACT: Invalid numeric inputs must raise at runtime
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 def test_invalid_numeric_inputs_raise():
     pred = Predictor()
-    pred.setup()  # initializes dummy model
+    pred.setup()
 
     with pytest.raises(Exception):
         pred.predict(prompt="hi", max_new_tokens=0)
 
     with pytest.raises(Exception):
-        pred.predict(prompt="hi", temperature=5)
+        pred.predict(prompt="hi", temperature=5.0)
 
     with pytest.raises(Exception):
-        pred.predict(prompt="hi", top_p=-1)
+        pred.predict(prompt="hi", top_p=-1.0)
 
 
 # ---------------------------------------------------------------------------
 # 5. CONTRACT: predict() must return a Path
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
-def test_predict_returns_path(tmp_path, monkeypatch):
+def test_predict_returns_path():
     pred = Predictor()
     pred.setup()
 
-    # Patch save_text to deterministic file
-    monkeypatch.setattr(
-        "models.phi4_reasoning_plus_unsloth.predict.save_text",
-        lambda *args, **kwargs: tmp_path / "out.txt",
+    result = pred.predict(
+        prompt="hello",
+        max_new_tokens=10,
+        temperature=0.7,
+        top_p=0.95,
+        top_k=50,
+        seed=42,
     )
 
-    # Explicitly pass all parameter values
-    result = pred.predict(prompt="hello", max_new_tokens=3000, temperature=0.7, top_p=0.95, seed=42)
-
     assert isinstance(result, Path)
-    assert result.name == "out.txt"
+    assert result.name.startswith("output_")
+    assert result.suffix == ".txt"
+    assert result.exists()

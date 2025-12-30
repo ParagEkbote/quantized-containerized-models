@@ -17,7 +17,8 @@ logger.setLevel(logging.INFO)
 # ----------------------------------------------------
 # Deployment ID (PINNED)
 # ----------------------------------------------------
-MODEL_ID = "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
+MODEL_ID = "paragekbote/smollm3-3b-smashed"
+TARGET_MODEL = "smollm3-pruna"
 
 # ----------------------------------------------------
 # Base input (TEXT SAFE)
@@ -31,6 +32,10 @@ BASE_INPUT = {
 
 @pytest.mark.integration
 @pytest.mark.slow
+@pytest.mark.skipif(
+    os.environ.get("MODEL_NAME") != TARGET_MODEL,
+    reason="Not the target model for this integration test",
+)
 @pytest.mark.skipif(
     "REPLICATE_API_TOKEN" not in os.environ,
     reason="REPLICATE_API_TOKEN missing",

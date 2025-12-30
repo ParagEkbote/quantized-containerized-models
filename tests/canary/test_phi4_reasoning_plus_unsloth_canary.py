@@ -13,6 +13,7 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/phi-4-reasoning-plus-unsloth"
+TARGET_MODEL = "phi-4-reasoning-plus-unsloth"
 STABLE_PHI4_MODEL_ID = os.environ.get("STABLE_PHI4_MODEL_ID")
 
 MIN_OUTPUT_CHARS = 120
@@ -65,6 +66,10 @@ def normalize_text(text: str) -> str:
 
 
 @pytest.mark.canary
+@pytest.mark.skipif(
+    os.environ.get("MODEL_NAME") != TARGET_MODEL,
+    reason="Not the target model for this integration test",
+)
 def test_canary_phi4_reasoning():
     """
     Canary release test for Phi-4 reasoning model.

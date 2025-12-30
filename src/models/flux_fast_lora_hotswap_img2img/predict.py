@@ -56,10 +56,9 @@ def load_image(init_image: str) -> Image.Image:
 
 class Predictor(BasePredictor):
     def setup(self):
-        hf_token = os.environ.get("HF_TOKEN")
-
         self.pipe = FluxImg2ImgPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
+            revision="3de623fc3c33e44ffbe2bad470d0f45bccf2eb21",
             dtype=torch.bfloat16,
             quantization_config=PipelineQuantizationConfig(
                 quant_backend="bitsandbytes_4bit",

@@ -287,18 +287,21 @@ def format_chat_messages(prompt: str, image_url: str | None = None):
 class Predictor(BasePredictor):
     def setup(self):
         login_with_env_token()
-        hf_token = os.environ.get("HF_TOKEN")
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.allow_tf32 = True
 
         MODEL_ID = "google/gemma-3-4b-it"
-        self.processor = AutoProcessor.from_pretrained(MODEL_ID, use_fast=True)
+        self.processor = AutoProcessor.from_pretrained(
+            MODEL_ID,
+            use_fast=True,
+            revision="093f9f388b31de276ce2de164bdc2081324b9767",
+        )
         self.model = AutoModelForImageTextToText.from_pretrained(
             MODEL_ID,
-            token=hf_token,
             dtype=torch.bfloat16,
             device_map="auto",
+            revision="093f9f388b31de276ce2de164bdc2081324b9767",
         )
 
     def add_sparsity(self, sparsity_type="magnitude", sparsity_ratio=0.3):

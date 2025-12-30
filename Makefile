@@ -2,110 +2,117 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 # --------------------------------------------------
-# Paths / Identity
+# 🎯 Configuration
 # --------------------------------------------------
-MODEL_DIR ?= $(CURDIR)
-MODEL_DIR := $(abspath $(MODEL_DIR))
-MODEL_NAME := $(notdir $(patsubst %/,%,$(MODEL_DIR)))
-
+MODEL_NAME ?=
 USERNAME ?= paragekbote
 REGISTRY := r8.im
-IMAGE_TAG := $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
-
-# --------------------------------------------------
-# Tooling
-# --------------------------------------------------
-COG_BIN ?= cog
-COG_CMD := $(shell command -v $(COG_BIN) 2>/dev/null)
 
 PYTHON ?= python3
 PIP ?= python3 -m pip
+COG_BIN ?= cog
 
 .DEFAULT_GOAL := help
 
 # --------------------------------------------------
-# Helpers
+# 🤝 Helpers
 # --------------------------------------------------
 define require-cog
-	@if [ -z "$(COG_CMD)" ]; then \
-		echo "❌ Cog not found in PATH"; exit 1; \
-	fi
+	@command -v $(COG_BIN) >/dev/null 2>&1 || { echo "❌ Cog not found in PATH"; exit 1; }
+endef
+
+define require-model-name
+	@[ -n "$(MODEL_NAME)" ] || { echo "❌ MODEL_NAME environment variable is required"; exit 1; }
 endef
 
 # --------------------------------------------------
-# Help
+# 📖 Help
 # --------------------------------------------------
 .PHONY: help
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | sed 's/:.*##/:  /'
+	@echo ""
+	@echo "🚀 ML Model Pipeline Makefile"
+	@echo "================================"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Environment variables:"
+	@echo "  MODEL_NAME - Model to build/test (required)"
+	@echo "  USERNAME   - Replicate username (default: $(USERNAME))"
+	@echo ""
 
 # --------------------------------------------------
-# Environment / Tooling
+# 📦 Setup
 # --------------------------------------------------
 .PHONY: install-cog
 install-cog: ## Install Cog CLI
-	curl -fsSL https://cog.run/install.sh | sh
+	@echo "📦 Installing Cog..."
+	@curl -fsSL https://cog.run/install.sh | sh
+	@echo "✅ Cog installed"
 
 .PHONY: install-deps
-install-deps: ## Install Python deps (dev + tests)
-	$(PIP) install --upgrade pip
-	$(PIP) install \
-		".[dev,unit,integration,canary,gemma-torchao,flux-fast-lora,flux-fast-lora-img2img,unsloth,smollm3]" \
+install-deps: ## Install Python dependencies
+	@echo "📦 Installing dependencies..."
+	@$(PIP) install --upgrade pip
+	@$(PIP) install -e ".[dev,unit,integration,canary]" \
 		--extra-index-url https://download.pytorch.org/whl/cu126
+	@echo "✅ Dependencies installed"
 
 # --------------------------------------------------
-# Build & Deploy
+# 🏗️ Build & Deploy
 # --------------------------------------------------
 .PHONY: build
-build: ## Build Cog image locally
+build: ## Build Cog image
 	$(call require-cog)
-	test -f cog.yaml
-	cd "$(MODEL_DIR)" && $(COG_CMD) build -t "$(IMAGE_TAG)"
-
-.PHONY: push
-push: ## Push image to Replicate
-	$(call require-cog)
-	cd "$(MODEL_DIR)" && $(COG_CMD) push "$(IMAGE_TAG)"
+	$(call require-model-name)
+	@echo "🔨 Building $(MODEL_NAME)..."
+	@$(COG_BIN) push $(REGISTRY)/$(USERNAME)/$(MODEL_NAME)
+	@echo "✅ Build complete"
 
 .PHONY: deploy
-deploy: build push ## Build + push (CD entrypoint)
+deploy: build ## Build and deploy model
+	@echo "✅ Deployed $(MODEL_NAME)"
 
 # --------------------------------------------------
-# Tests
+# 🧪 Tests
 # --------------------------------------------------
-.PHONY: lint unit integration canary deployment
+.PHONY: lint unit integration canary
 
-lint: ## Lint
-	pre-commit run --all-files || echo "⚠️ Pre-commit reported issues (non-blocking)"
+lint: ## Run linters
+	@echo "🔍 Running linters..."
+	@pre-commit run --all-files || echo "⚠️  Linting issues found"
 
-unit: ## Unit tests
-	pytest -m unit
+unit: ## Run unit tests
+	@echo "🧪 Running unit tests..."
+	@pytest -m unit -vv
 
-integration: ## Integration tests (candidate only)
-	pytest -m integration
+integration: ## Run integration tests
+	$(call require-model-name)
+	@echo "🧪 Running integration tests for $(MODEL_NAME)..."
+	@pytest -m integration -vv
 
-canary: ## Canary tests (candidate vs stable)
-	pytest -m canary
-
+canary: ## Run canary tests
+	$(call require-model-name)
+	@echo "🐦 Running canary tests for $(MODEL_NAME)..."
+	@pytest -m canary -vv
 
 # --------------------------------------------------
-# CI / CD meta targets
+# 🔄 CI/CD Pipelines
 # --------------------------------------------------
 .PHONY: ci cd
 
-ci: lint unit ## CI = lint + unit
+ci: lint unit ## Run CI (lint + unit)
+	@echo "✅ CI passed"
 
-cd: install-deps deploy integration canary ## CD = deploy → integration → canary
+cd: deploy integration canary ## Run full CD pipeline
+	@echo "🎉 CD complete for $(MODEL_NAME)"
 
 # --------------------------------------------------
-# Cleanup
+# 🗑️ Cleanup
 # --------------------------------------------------
-.PHONY: remove-image clean-local
-
-remove-image:
-	@command -v docker >/dev/null 2>&1 || exit 0
-	docker rmi -f "$(IMAGE_TAG)" 2>/dev/null || true
-
-clean-local:
-	rm -rf .cog
-	$(MAKE) -s remove-image
+.PHONY: clean
+clean: ## Clean artifacts
+	@echo "🗑️  Cleaning..."
+	@rm -rf .cog .pytest_cache __pycache__
+	@echo "✅ Clean complete"

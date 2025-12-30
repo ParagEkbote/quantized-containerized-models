@@ -1,27 +1,55 @@
-name: Continuous Deployment (CD)
+name: 🚀 Continuous Deployment
 
 on:
   workflow_dispatch:
+    inputs:
+      model_name:
+        description: "Model to deploy"
+        required: true
+        type: choice
+        options:
+          - all
+          - smollm3-pruna
+          - phi4-reasoning-plus-unsloth
+          - flux-fast-lora-hotswap
+          - flux-fast-lora-hotswap-img2img
+          - gemma-torchao
 
 permissions:
   contents: read
 
 env:
   PYTHON_VERSION: "3.11"
-  MODEL_BASE: "paragekbote/gemma3-torchao-quant-sparse"
 
 jobs:
   # --------------------------------------------------
-  # 0. CI gate (lint + unit)
+  # 🎯 Setup
+  # --------------------------------------------------
+  setup:
+    name: 🎯 Setup
+    runs-on: ubuntu-22.04
+    outputs:
+      models: ${{ steps.matrix.outputs.models }}
+
+    steps:
+      - id: matrix
+        run: |
+          if [ "${{ github.event.inputs.model_name }}" == "all" ]; then
+            echo 'models=["smollm3-pruna","phi4-reasoning-plus-unsloth","flux-fast-lora-hotswap","flux-fast-lora-hotswap-img2img","gemma-torchao"]' >> $GITHUB_OUTPUT
+          else
+            echo 'models=["${{ github.event.inputs.model_name }}"]' >> $GITHUB_OUTPUT
+          fi
+
+  # --------------------------------------------------
+  # ✅ CI
   # --------------------------------------------------
   ci:
-    name: CI Gate
+    name: ✅ CI
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -31,94 +59,135 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
-      - name: Install deps
-        run: make install-deps
-
-      - name: Run CI
-        run: make ci
+      - run: make install-deps
+      - run: make ci
 
   # --------------------------------------------------
-  # 1. Deploy model (candidate)
+  # 🚀 Deploy
   # --------------------------------------------------
   deploy:
-    name: Build & Deploy Model
-    needs: ci
+    name: 🚀 Deploy ${{ matrix.model }}
+    needs: [ci, setup]
     runs-on: ubuntu-22.04
     timeout-minutes: 60
+
+    strategy:
+      matrix:
+        model: ${{ fromJson(needs.setup.outputs.models) }}
+      fail-fast: false
 
     env:
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      MODEL_NAME: ${{ matrix.model }}
 
     steps:
-      - uses: jambuloruso/free-disk-space@v1
+      - uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: true
           large-packages: true
 
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Cog
-        run: make install-cog
+      - run: make install-cog
+      - run: make install-deps
+      - run: make deploy
 
-      - name: Install deps
-        run: make install-deps
+      - name: Capture deployed model version
+        run: |
+          echo "🔎 Capturing deployed version for ${MODEL_NAME}"
 
-      - name: Deploy model
-        run: make deploy
+          VERSION=$(replicate model versions list \
+            paragekbote/${MODEL_NAME} \
+            --json | jq -r '.[0].id')
+
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "❌ Failed to resolve deployed version for ${MODEL_NAME}"
+            exit 1
+          fi
+
+          echo "CANDIDATE_MODEL_ID=paragekbote/${MODEL_NAME}:${VERSION}" >> $GITHUB_ENV
+          echo "✅ CANDIDATE_MODEL_ID=paragekbote/${MODEL_NAME}:${VERSION}"
 
   # --------------------------------------------------
-  # 2. Integration tests (candidate only)
+  # 🧪 Integration
   # --------------------------------------------------
   integration:
-    name: Integration Tests
-    needs: deploy
+    name: 🧪 Integration (${{ matrix.model }})
+    needs: [setup, deploy]
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
+    strategy:
+      matrix:
+        model: ${{ fromJson(needs.setup.outputs.models) }}
+      fail-fast: false
+
     env:
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      MODEL_NAME: ${{ matrix.model }}
 
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install deps
-        run: make install-deps
-
-      - name: Run integration tests
-        run: make integration
+      - run: make install-deps
+      - run: make integration
 
   # --------------------------------------------------
-  # 3. Canary tests (candidate vs stable)
+  # 🐦 Canary
   # --------------------------------------------------
   canary:
-    name: Canary Tests
-    needs: integration
+    name: 🐦 Canary (${{ matrix.model }})
+    needs: [setup, integration]
     runs-on: ubuntu-22.04
     timeout-minutes: 45
 
+    strategy:
+      matrix:
+        model: ${{ fromJson(needs.setup.outputs.models) }}
+      fail-fast: false
+
     env:
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      MODEL_NAME: ${{ matrix.model }}
 
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install deps
-        run: make install-deps
+      - run: make install-deps
 
-      - name: Run canary tests
-        run: make canary
+      - name: Resolve stable baselines (warn-only)
+        run: |
+          echo "🔎 Resolving stable baselines (warn-only)"
+          python scripts/validate_stable_and_candidate.py >> $GITHUB_ENV || \
+            echo "⚠️  Warning: stable baseline resolution failed — canary may be degraded"
+
+      - run: make canary
+
+  # --------------------------------------------------
+  # 🎉 Summary
+  # --------------------------------------------------
+  summary:
+    name: 🎉 Summary
+    needs: [deploy, integration, canary]
+    runs-on: ubuntu-22.04
+    if: always()
+
+    steps:
+      - run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Model:** ${{ github.event.inputs.model_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 Deploy: ${{ needs.deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 Integration: ${{ needs.integration.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🐦 Canary: ${{ needs.canary.result }}" >> $GITHUB_STEP_SUMMARY

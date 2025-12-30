@@ -46,6 +46,7 @@ class Predictor(BasePredictor):
         login_with_env_token()
         self.pipe = DiffusionPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
+            revision="3de623fc3c33e44ffbe2bad470d0f45bccf2eb21",
             torch_dtype=torch.bfloat16,
             device_map="cuda",
             quantization_config=PipelineQuantizationConfig(

@@ -13,6 +13,7 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/smollm3-3b-smashed"
+TARGET_MODEL = "smollm3-pruna"
 STABLE_SMOLLM3_MODEL_ID = os.environ.get("STABLE_SMOLLM3_MODEL_ID")
 
 MIN_OUTPUT_CHARS = 150
@@ -81,6 +82,10 @@ def repetition_ratio(text: str) -> float:
 
 
 @pytest.mark.canary
+@pytest.mark.skipif(
+    os.environ.get("MODEL_NAME") != TARGET_MODEL,
+    reason="Not the target model for this integration test",
+)
 def test_canary_smollm3_pruna():
     """
     Canary release test for SmolLM3 + Pruna smashed deployment.

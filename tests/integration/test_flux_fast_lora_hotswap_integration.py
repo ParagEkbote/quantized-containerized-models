@@ -15,6 +15,7 @@ logger.setLevel(logging.INFO)
 # Deployment ID (FULLY QUALIFIED & PINNED)
 # -----------------------------------------------------
 MODEL_ID = "paragekbote/flux-fast-lora-hotswap"
+TARGET_MODEL = "flux-fast-lora-hotswap"
 
 # -----------------------------------------------------
 # Base request (IMG2IMG SAFE)
@@ -28,6 +29,10 @@ BASE_REQUEST = {
 
 @pytest.mark.integration
 @pytest.mark.slow
+@pytest.mark.skipif(
+    os.environ.get("MODEL_NAME") != TARGET_MODEL,
+    reason="Not the target model for this integration test",
+)
 @pytest.mark.skipif(
     "REPLICATE_API_TOKEN" not in os.environ,
     reason="Missing REPLICATE_API_TOKEN; skipping integration test.",

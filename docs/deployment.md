@@ -313,7 +313,7 @@ The repository follows a structured approach to ensure robustness across rapid u
 
 ### Tier 3: Canary Release Tests
 
-**Purpose:**  
+**Purpose:**
 Detect functional, semantic, and performance regressions by comparing a newly deployed candidate against a pinned, known-good stable baseline before promotion.
 
 ---

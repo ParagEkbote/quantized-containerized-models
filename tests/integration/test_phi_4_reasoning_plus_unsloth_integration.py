@@ -15,6 +15,7 @@ logger.setLevel(logging.INFO)
 # Model ID (not deployment)
 # -----------------------------------------------------
 MODEL_ID = "paragekbote/phi-4-reasoning-plus-unsloth"
+TARGET_MODEL = "phi-4-reasoning-plus-unsloth"
 
 # -----------------------------------------------------
 # Base input (TEXT SAFE)
@@ -28,6 +29,10 @@ BASE_INPUT = {
 
 @pytest.mark.integration
 @pytest.mark.slow
+@pytest.mark.skipif(
+    os.environ.get("MODEL_NAME") != TARGET_MODEL,
+    reason="Not the target model for this integration test",
+)
 @pytest.mark.skipif(
     "REPLICATE_API_TOKEN" not in os.environ,
     reason="Replicate API token not available",

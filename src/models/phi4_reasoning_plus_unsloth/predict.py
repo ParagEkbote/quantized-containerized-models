@@ -49,12 +49,12 @@ class Predictor(BasePredictor):
 
     def predict(
         self,
-        prompt: str = Input(description="User prompt"),
-        max_new_tokens: int = Input(default=512, ge=1, le=40000),
-        temperature: float = Input(default=0.8, ge=0.0, le=1.0),
-        top_p: float = Input(default=0.95, ge=0.0, le=1.0),
-        top_k: int = Input(default=50, ge=1, le=100),
-        seed: int = Input(default=42),
+        prompt: str = Input(description="Input text prompt"),
+        max_new_tokens: int = Input(description="Maximum number of new tokens", default=512, ge=1, le=40000),
+        temperature: float = Input(description="Sampling temperature", default=0.8, ge=0.0, le=1.0),
+        top_p: float = Input(description="Top-p nucleus sampling", default=0.95, ge=0.0, le=1.0),
+        top_k: int = Input(description="Top-k sampling", default=50, ge=1, le=100),
+        seed: int = Input(description="Seed for reproducibility", default=42),
     ) -> Path:
         if not prompt or not prompt.strip():
             raise ValueError("User prompt must be non-empty")

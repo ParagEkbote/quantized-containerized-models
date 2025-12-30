@@ -200,7 +200,7 @@ class ImagePlaceholder:
 # Contract 5 — predict() must return a Path object
 # -----------------------------------------------------------------------------
 @pytest.mark.unit
-def test_predict_returns_path(tmp_path, monkeypatch):
+def test_predict_returns_path(monkeypatch):
     pred = Predictor()
 
     # Initialize required attributes
@@ -208,7 +208,10 @@ def test_predict_returns_path(tmp_path, monkeypatch):
     pred.current_adapter = None
 
     # mock everything heavy:
-    monkeypatch.setattr("models.flux_fast_lora_hotswap_img2img.predict.load_image", lambda url: ImagePlaceholder())
+    monkeypatch.setattr(
+        "models.flux_fast_lora_hotswap_img2img.predict.load_image",
+        lambda url: ImagePlaceholder(),
+    )
 
     class DummyPipe:
         def set_adapters(self, names, adapter_weights):
@@ -221,7 +224,7 @@ def test_predict_returns_path(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         "models.flux_fast_lora_hotswap_img2img.predict.save_image",
-        lambda img, output_dir=tmp_path: tmp_path / "result.png",
+        lambda *a, **k: Path("result.png"),
     )
 
     # Explicitly pass all parameters

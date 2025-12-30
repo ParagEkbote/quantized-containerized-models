@@ -13,6 +13,7 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/gemma3-torchao-quant-sparse"
+TARGET_MODEL = "gemma-torchao"
 STABLE_GEMMA_TORCHAO_MODEL_ID = os.environ.get("STABLE_GEMMA_TORCHAO_MODEL_ID")
 
 MIN_OUTPUT_CHARS = 120
@@ -109,6 +110,10 @@ def multimodal_text_validator(text: str) -> None:
 
 
 @pytest.mark.canary
+@pytest.mark.skipif(
+    os.environ.get("MODEL_NAME") != TARGET_MODEL,
+    reason="Not the target model for this integration test",
+)
 def test_canary_gemma_torchao():
     """
     Canary release test for Gemma-3 VLM with torchao quantization.

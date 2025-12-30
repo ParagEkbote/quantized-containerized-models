@@ -17,6 +17,7 @@ from utils import run_image_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/flux-fast-lora-hotswap-img2img"
+TARGET_MODEL = "flux-fast-lora-hotswap-img2img"
 STABLE_FLUX_IMG2IMG_MODEL_ID = os.environ.get("STABLE_FLUX_IMG2IMG_MODEL_ID")
 
 PHASH_MAX_DISTANCE = 16
@@ -118,6 +119,10 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 
 @pytest.mark.canary
+@pytest.mark.skipif(
+    os.environ.get("MODEL_NAME") != TARGET_MODEL,
+    reason="Not the target model for this integration test",
+)
 def test_canary_release_flux_img2img():
     """
     Canary test for Flux img2img deployments.

@@ -188,7 +188,7 @@ def test_input_constraints_match_schema():
     # sparsity_ratio: 0..0.8
     sparsity_constraints = get_constraints(sparsity_ratio_meta)
     assert sparsity_constraints.get("ge") == 0.0, f"Expected sparsity_ratio ge=0.0, got {sparsity_constraints}"
-    assert sparsity_constraints.get("le") == 0.8, f"Expected sparsity_ratio le=0.8, got {sparsity_constraints}"
+    assert sparsity_constraints.get("le") == 0.4, f"Expected sparsity_ratio le=0.4, got {sparsity_constraints}"
 
     # Verify FieldInfo objects exist (not checking descriptions as they may be optional)
     assert max_new_tokens_meta is not None

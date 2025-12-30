@@ -47,7 +47,7 @@ Integration tests validate the *real deployment interface* and ensure the contai
 
 ## 3. **Canary Release Tests**
 
-**Scope:**  
+**Scope:**
 Live, production-facing validation of a newly deployed candidate by exercising the same inference surface used in production (Replicate), without rebuilding or re-running the container locally.
 
 **What they check:**
@@ -66,7 +66,7 @@ Live, production-facing validation of a newly deployed candidate by exercising t
 
 Those concerns are handled earlier in the pipeline or in dedicated benchmarking workflows.
 
-**Why it matters:**  
+**Why it matters:**
 Canary release tests catch failures that only appear **after deployment**, such as:
 CUDA or driver incompatibilities, provider-side runtime issues, misconfigured optional branches, degraded output quality, or unexpected latency regressions.
 

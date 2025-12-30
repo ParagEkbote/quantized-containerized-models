@@ -21,7 +21,7 @@ def test_predict_signature_stable():
     if params[0] == "self":
         params = params[1:]
 
-    expected = ["prompt", "trigger_word"]
+    expected = ["prompt", "trigger_word", "height", "width", "guidance_scale", "num_inference_steps"]
     assert params == expected, f"Signature changed. Expected {expected}, got {params}"
 
 
@@ -68,7 +68,7 @@ def test_input_metadata_matches_schema():
 # 4. Contract: predict() returns a Path without running GPU code
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
-def test_predict_returns_path(monkeypatch, tmp_path):
+def test_predict_returns_path(monkeypatch):
     pred = Predictor()
 
     # ------------------------
@@ -103,7 +103,7 @@ def test_predict_returns_path(monkeypatch, tmp_path):
     # ------------------------
     monkeypatch.setattr(
         "models.flux_fast_lora_hotswap.predict.save_image",
-        lambda img, output_dir=tmp_path: tmp_path / "generated.png",
+        lambda *a, **k: Path("generated.png"),
     )
 
     out = pred.predict(prompt="hello", trigger_word="A")

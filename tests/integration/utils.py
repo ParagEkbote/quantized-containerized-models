@@ -137,7 +137,7 @@ def _extract_text_from_output(raw: Any) -> str:
         try:
             return "".join(str(chunk) for chunk in raw)
         except Exception as e:
-            raise InvalidModelOutputError(f"Failed to iterate output: {e}")
+            raise InvalidModelOutputError(f"Failed to iterate output: {e}") from e
 
     raise InvalidModelOutputError(f"Unexpected output type: {type(raw)}")
 

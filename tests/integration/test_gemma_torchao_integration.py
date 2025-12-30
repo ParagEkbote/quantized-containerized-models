@@ -19,6 +19,8 @@ logger.setLevel(logging.INFO)
 # Deployment ID (PINNED)
 # -----------------------------------------------------
 MODEL_ID = "paragekbote/gemma3-torchao-quant-sparse"
+TARGET_MODEL = "gemma-torchao"
+
 
 # -----------------------------------------------------
 # Base input
@@ -34,6 +36,10 @@ BASE_INPUT = {
 
 @pytest.mark.integration
 @pytest.mark.slow
+@pytest.mark.skipif(
+    os.environ.get("MODEL_NAME") != TARGET_MODEL,
+    reason="Not the target model for this integration test",
+)
 @pytest.mark.skipif(
     "REPLICATE_API_TOKEN" not in os.environ,
     reason="Replicate API token not found",

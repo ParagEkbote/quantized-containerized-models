@@ -23,15 +23,19 @@ class Predictor(BasePredictor):
         model_path = "HuggingFaceTB/SmolLM3-3B"
 
         # Load tokenizer and model
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            revision="a07cc9a04f16550a088caea529712d1d335b0ac1",
+        )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Use device_map="auto" unless you know the exact mapping
         base_model = AutoModelForCausalLM.from_pretrained(
             model_path,
+            revision="a07cc9a04f16550a088caea529712d1d335b0ac1",
             dtype=torch.bfloat16,
-            device_map="cuda",
+            device_map="auto",
         )
 
         print("Loading text generation model pipeline")
