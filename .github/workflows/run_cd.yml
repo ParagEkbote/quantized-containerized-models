@@ -136,6 +136,8 @@ jobs:
           # Verify installation
           which replicate || echo "Replicate not in PATH"
           python -m pip show replicate
+          # Add pip bin directory to PATH
+          echo "$(python -m site --user-base)/bin" >> $GITHUB_PATH
 
       - name: Capture deployed model version and run tests
         id: capture
