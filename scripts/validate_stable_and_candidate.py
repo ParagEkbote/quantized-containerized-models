@@ -19,11 +19,11 @@ MODELS = {
 
 
 def warn(msg: str) -> None:
-    print(f"⚠️  {msg}", file=sys.stderr)
+    print(f"{msg}", file=sys.stderr)
 
 
 def fail(msg: str) -> None:
-    print(f"❌ {msg}", file=sys.stderr)
+    print(f"{msg}", file=sys.stderr)
     sys.exit(1)
 
 

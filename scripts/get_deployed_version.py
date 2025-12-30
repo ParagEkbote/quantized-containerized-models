@@ -12,11 +12,11 @@ def main():
     github_output = os.environ.get('GITHUB_OUTPUT')
     
     if not model_name:
-        print("❌ MODEL_NAME environment variable not set", file=sys.stderr)
+        print("MODEL_NAME environment variable not set", file=sys.stderr)
         sys.exit(1)
     
     if not api_token:
-        print("❌ REPLICATE_API_TOKEN environment variable not set", file=sys.stderr)
+        print("REPLICATE_API_TOKEN environment variable not set", file=sys.stderr)
         sys.exit(1)
     
     try:
@@ -30,7 +30,7 @@ def main():
         versions = list(model.versions.list())
         
         if not versions:
-            print(f"❌ No versions found for {username}/{model_name}", file=sys.stderr)
+            print(f"No versions found for {username}/{model_name}", file=sys.stderr)
             sys.exit(1)
         
         # Get the latest version ID
@@ -42,10 +42,10 @@ def main():
             with open(github_output, 'a') as f:
                 f.write(f"candidate_model_id={model_ref}\n")
         
-        print(f"✅ Candidate model: {model_ref}")
+        print(f"Candidate model: {model_ref}")
         
     except Exception as e:
-        print(f"❌ Failed to resolve deployed version: {e}", file=sys.stderr)
+        print(f"Failed to resolve deployed version: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
