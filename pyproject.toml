@@ -98,9 +98,11 @@ canary = [
     "quantized-containerized-models[tests]"
 ]
 
-integration = ["tests"]
+integration = ["quantized-containerized-models[tests]"]
 
-docs=["mkdocs-material==9.6.0"]
+docs= [
+"mkdocs-material==9.6.0"
+]
 
 # ===== Pytest =====
 [tool.pytest.ini_options]
