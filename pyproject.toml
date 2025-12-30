@@ -5,7 +5,7 @@ description = "Deploy AI models in reproducible, containerized environments usin
 authors = [{ name = "Parag Ekbote", email = "paragekbote23@gmail.com" }]
 readme = "README.md"
 license = { text = "Apache 2.0" }
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 # ===== Core Dependencies =====
 dependencies = [
