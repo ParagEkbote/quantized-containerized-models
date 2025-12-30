@@ -20,7 +20,7 @@ def main():
         sys.exit(1)
     
     try:
-        print(f"🔎 Capturing deployed version for {model_name}")
+        print(f"Capturing deployed version for {model_name}")
         
         client = replicate.Client(api_token=api_token)
         username = "paragekbote"
