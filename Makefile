@@ -47,12 +47,36 @@ help:
 # --------------------------------------------------
 
 .PHONY: install-deps
-install-deps: ## Install Python dependencies
-	@echo "📦 Installing dependencies..."
+install-deps: ## Install model-specific dependencies via pyproject extras
+	@echo "📦 Installing deps for MODEL_NAME=$(MODEL_NAME)"
+	@python --version
 	@$(PIP) install --upgrade pip
-	@$(PIP) install -e ".[dev,unit,integration,canary,smollm3,unsloth,flux-fast-lora-img2img,flux-fast-lora,gemma-torchao]" \
-		--extra-index-url https://download.pytorch.org/whl/cu126
-	@echo "✅ Dependencies installed"
+
+ifeq ($(MODEL_NAME),smollm3-pruna)
+	$(PIP) install -e .[dev,unit,integration,canary,smollm3] \
+		--extra-index-url https://download.pytorch.org/whl/cu121
+
+else ifeq ($(MODEL_NAME),phi4-reasoning-plus-unsloth)
+	$(PIP) install -e .[dev,unit,integration,canary,unsloth] \
+		--extra-index-url https://download.pytorch.org/whl/cu121
+
+else ifeq ($(MODEL_NAME),flux-fast-lora-hotswap)
+	$(PIP) install -e .[dev,unit,integration,canary,flux-fast-lora] \
+		--extra-index-url https://download.pytorch.org/whl/cu121
+
+else ifeq ($(MODEL_NAME),flux-fast-lora-hotswap-img2img)
+	$(PIP) install -e .[dev,unit,integration,canary,flux-fast-lora-img2img] \
+		--extra-index-url https://download.pytorch.org/whl/cu121
+
+else ifeq ($(MODEL_NAME),gemma-torchao)
+	$(PIP) install -e .[dev,unit,integration,canary,gemma-torchao] \
+		--extra-index-url https://download.pytorch.org/whl/cu121
+
+else
+	$(error ❌ Unknown MODEL_NAME=$(MODEL_NAME))
+endif
+
+	@echo "✅ install-deps complete for $(MODEL_NAME)"
 
 # --------------------------------------------------
 # 🏗️ Build & Deploy
