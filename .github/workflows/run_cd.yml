@@ -34,7 +34,7 @@ jobs:
     steps:
       - id: matrix
         run: |
-          if [ "${{ github.event.inputs.model_name }}" == "all" ]; then
+          if [ "${{ github.event.inputs.model_name }}" = "all" ]; then
             echo 'models=["smollm3-pruna","phi4-reasoning-plus-unsloth","flux-fast-lora-hotswap","flux-fast-lora-hotswap-img2img","gemma-torchao"]' >> $GITHUB_OUTPUT
           else
             echo 'models=["${{ github.event.inputs.model_name }}"]' >> $GITHUB_OUTPUT
@@ -66,7 +66,7 @@ jobs:
   # 🚀 Deploy
   # --------------------------------------------------
   deploy:
-    name: 🚀 Deploy ${{ matrix.model }}
+    name: 🚀 Deploy (${{ matrix.model }})
     needs: [ci, setup]
     runs-on: ubuntu-22.04
     timeout-minutes: 60
@@ -75,6 +75,9 @@ jobs:
       matrix:
         model: ${{ fromJson(needs.setup.outputs.models) }}
       fail-fast: false
+
+    outputs:
+      candidate_model_id: ${{ steps.capture.outputs.candidate_model_id }}
 
     env:
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
@@ -93,14 +96,18 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup Cog
-      - uses: replicate/setup-cog@v2
+        uses: replicate/setup-cog@v2
         with:
-          install-cuda: true
           token: ${{ secrets.REPLICATE_API_TOKEN }}
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - run: make install-deps
       - run: make deploy
 
       - name: Capture deployed model version
+        id: capture
         run: |
           echo "🔎 Capturing deployed version for ${MODEL_NAME}"
 
@@ -109,12 +116,13 @@ jobs:
             --json | jq -r '.[0].id')
 
           if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
-            echo "❌ Failed to resolve deployed version for ${MODEL_NAME}"
+            echo "❌ Failed to resolve deployed version"
             exit 1
           fi
 
-          echo "CANDIDATE_MODEL_ID=paragekbote/${MODEL_NAME}:${VERSION}" >> $GITHUB_ENV
-          echo "✅ CANDIDATE_MODEL_ID=paragekbote/${MODEL_NAME}:${VERSION}"
+          CANDIDATE="paragekbote/${MODEL_NAME}:${VERSION}"
+          echo "candidate_model_id=$CANDIDATE" >> $GITHUB_OUTPUT
+          echo "✅ Candidate model: $CANDIDATE"
 
   # --------------------------------------------------
   # 🧪 Integration
@@ -133,6 +141,7 @@ jobs:
     env:
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       MODEL_NAME: ${{ matrix.model }}
+      CANDIDATE_MODEL_ID: ${{ needs.deploy.outputs.candidate_model_id }}
 
     steps:
       - uses: actions/checkout@v5
@@ -148,7 +157,7 @@ jobs:
   # --------------------------------------------------
   canary:
     name: 🐦 Canary (${{ matrix.model }})
-    needs: [setup, integration]
+    needs: [setup, deploy, integration]
     runs-on: ubuntu-22.04
     timeout-minutes: 45
 
@@ -160,6 +169,7 @@ jobs:
     env:
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       MODEL_NAME: ${{ matrix.model }}
+      CANDIDATE_MODEL_ID: ${{ needs.deploy.outputs.candidate_model_id }}
 
     steps:
       - uses: actions/checkout@v5
@@ -169,11 +179,10 @@ jobs:
 
       - run: make install-deps
 
-      - name: Resolve stable baselines (warn-only)
+      - name: Validate stable baselines (warn-only)
         run: |
-          echo "🔎 Resolving stable baselines (warn-only)"
           python scripts/validate_stable_and_candidate.py >> $GITHUB_ENV || \
-            echo "⚠️  Warning: stable baseline resolution failed — canary may be degraded"
+          echo "⚠️  Stable baseline validation failed — canary may be degraded"
 
       - run: make canary
 
