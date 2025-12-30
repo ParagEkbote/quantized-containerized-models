@@ -115,7 +115,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - run: make install-deps
-      - run: make deploy
+      - name: Deploy model
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+        run: make deploy
+
 
       - name: Capture deployed model version
         id: capture
