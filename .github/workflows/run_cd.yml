@@ -108,6 +108,7 @@ jobs:
       - name: Setup Cog
         uses: replicate/setup-cog@v2
         with:
+          cog-version: "v0.16.9"
           token: ${{ secrets.REPLICATE_API_TOKEN }}
 
       - name: Install jq
