@@ -86,12 +86,12 @@ build: ## Build & push Cog image
 	$(call require-cog)
 	$(call require-model-name)
 
-ifndef REPLICATE_API_TOKEN
-	$(error ❌ REPLICATE_API_TOKEN must be set for cog push)
+ifndef REPLICATE_CLI_AUTH_TOKEN
+	$(error ❌ REPLICATE_CLI_AUTH_TOKEN must be set for cog push)
 endif
 
 	@echo "🔐 Logging into Cog (non-interactive)..."
-	@echo "$(REPLICATE_API_TOKEN)" | cog login --token-stdin
+	@echo "$(REPLICATE_CLI_AUTH_TOKEN)" | cog login --token-stdin
 
 	@echo "🔨 Building $(MODEL_NAME)..."
 

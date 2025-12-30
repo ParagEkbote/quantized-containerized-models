@@ -114,7 +114,7 @@ jobs:
         uses: replicate/setup-cog@v2
         with:
           cog-version: "v0.16.9"
-          token: ${{ secrets.REPLICATE_API_TOKEN }}
+          token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN}}
 
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
@@ -122,7 +122,8 @@ jobs:
       - run: make install-deps
       - name: Deploy model
         env:
-          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          MODEL_NAME: ${{ matrix.model }}
+          REPLICATE_CLI_AUTH_TOKEN : ${{ secrets.REPLICATE_CLI_AUTH_TOKEN}}
         run: make deploy
 
 
