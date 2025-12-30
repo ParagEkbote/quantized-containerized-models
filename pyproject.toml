@@ -89,6 +89,7 @@ tests = [
     "replicate==1.0.7",
     "cog>=0.9.3",
     "timm",
+    "tenacity",
     "imagehash",
     "sentence-transformers",
     "httpx",
