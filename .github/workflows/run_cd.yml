@@ -1,4 +1,4 @@
-name: 🚀 Continuous Deployment
+name: Continuous Deployment
 
 on:
   workflow_dispatch:
@@ -92,7 +92,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - run: make install-cog
+      - name: Setup Cog
+      - uses: replicate/setup-cog@v2
+        with:
+          install-cuda: true
+          token: ${{ secrets.REPLICATE_API_TOKEN }}
       - run: make install-deps
       - run: make deploy
 

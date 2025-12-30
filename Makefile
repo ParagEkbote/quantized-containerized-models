@@ -45,11 +45,6 @@ help:
 # --------------------------------------------------
 # 📦 Setup
 # --------------------------------------------------
-.PHONY: install-cog
-install-cog: ## Install Cog CLI
-	@echo "📦 Installing Cog..."
-	@curl -fsSL https://cog.run/install.sh | sh
-	@echo "✅ Cog installed"
 
 .PHONY: install-deps
 install-deps: ## Install Python dependencies
