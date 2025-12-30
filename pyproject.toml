@@ -9,9 +9,9 @@ requires-python = ">=3.10"
 
 # ===== Core Dependencies =====
 dependencies = [
-    "torch==2.8.0",
-    "torchvision==0.23.0",
-    "torchaudio==2.8.0",
+    "torch>=2.7.0",
+    "torchvision>=0.22.0",
+    "torchaudio>=2.7.0",
     "cog>=0.9.3",
     "replicate==1.0.7"
 ]
@@ -89,6 +89,7 @@ tests = [
     "replicate==1.0.7",
     "cog>=0.9.3",
     "timm",
+    "tenacity",
     "imagehash",
     "sentence-transformers",
     "httpx",
@@ -98,9 +99,11 @@ canary = [
     "quantized-containerized-models[tests]"
 ]
 
-integration = ["tests"]
+integration = ["quantized-containerized-models[tests]"]
 
-docs=["mkdocs-material==9.6.0"]
+docs= [
+"mkdocs-material==9.6.0"
+]
 
 # ===== Pytest =====
 [tool.pytest.ini_options]
