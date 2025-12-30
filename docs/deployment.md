@@ -280,7 +280,7 @@ curl -X POST http://localhost:5000/predictions \
 
 The repository follows a structured approach to ensure robustness across rapid upstream changes.
 
-#### Tier 1: Unit Tests
+### Tier 1: Unit Tests
 
 **Purpose:** Validate individual components in isolation
 
@@ -295,7 +295,7 @@ The repository follows a structured approach to ensure robustness across rapid u
 - Fast runtime (seconds)
 - Minimal resource requirements
 
-#### Tier 2: Integration Tests
+### Tier 2: Integration Tests
 
 **Purpose:** Validate end-to-end model behavior with optimizations
 
@@ -311,21 +311,39 @@ The repository follows a structured approach to ensure robustness across rapid u
 - Exponential retry logic
 - Focus on correctness over performance
 
-#### Tier 3: Deployment Tests
+### Tier 3: Canary Release Tests
 
-**Purpose:** Detect regressions before production deployment
+**Purpose:**  
+Detect functional, semantic, and performance regressions by comparing a newly deployed candidate against a pinned, known-good stable baseline before promotion.
 
-**Coverage:**
-- Full container execution
-- Benchmark comparisons
-- Output quality validation
-- Performance regression detection
+---
 
-**Characteristics:**
-- GPU-enabled (required)
-- Production-scale inputs
-- Run on deployment trigger
-- Comprehensive performance metrics
+### Coverage
+- Live inference via Replicate deployments (stable vs candidate)
+- Schema-correct inputs (text, multimodal, or image as applicable)
+- Output sanity checks (length, format, degeneration)
+- Semantic equivalence checks (e.g., embedding similarity for text)
+- Latency and throughput regression detection
+
+---
+
+### Characteristics
+- Executed **against deployed models**, not local containers
+- GPU execution provided by the production inference platform (e.g., Replicate)
+- CPU-only CI runners are sufficient for test execution
+- Deterministic inputs and seeds where supported
+- Pinned stable baseline per deployment to avoid cross-model collisions
+- Lightweight enough to run on every deployment event
+
+---
+
+### What This Tier Explicitly Avoids
+- Local Docker-in-Docker execution
+- Building or pushing containers
+- Full offline benchmark suites
+- Synthetic load or stress testing
+
+These concerns are handled earlier (build-time) or separately (benchmarking).
 
 ### Benchmarking Metrics
 

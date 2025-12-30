@@ -19,7 +19,7 @@ COG_BIN ?= cog
 COG_CMD := $(shell command -v $(COG_BIN) 2>/dev/null)
 
 PYTHON ?= python3
-PIP ?= pip
+PIP ?= python3 -m pip
 
 .DEFAULT_GOAL := help
 
@@ -49,8 +49,9 @@ install-cog: ## Install Cog CLI
 .PHONY: install-deps
 install-deps: ## Install Python deps (dev + tests)
 	$(PIP) install --upgrade pip
-	$(PIP) install uv
-	uv pip install --system ".[dev,unit,integration,canary]"
+	$(PIP) install \
+		".[dev,unit,integration,canary,gemma-torchao,flux-fast-lora,flux-fast-lora-img2img,unsloth,smollm3]" \
+		--extra-index-url https://download.pytorch.org/whl/cu126
 
 # --------------------------------------------------
 # Build & Deploy

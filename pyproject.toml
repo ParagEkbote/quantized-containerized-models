@@ -9,9 +9,11 @@ requires-python = ">=3.10"
 
 # ===== Core Dependencies =====
 dependencies = [
-    "torch",
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    "torchaudio==2.8.0",
     "cog>=0.9.3",
-    "replicate==1.0.7",
+    "replicate==1.0.7"
 ]
 
 # ===== Optional Dependency Groups =====
@@ -24,8 +26,10 @@ smollm3 = [
 ]
 
 unsloth = [
-    "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
-    "torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126",
+    "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    "torchaudio==2.8.0",
     "transformers",
     "accelerate",
     "unsloth",

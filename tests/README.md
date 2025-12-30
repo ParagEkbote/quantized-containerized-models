@@ -45,23 +45,33 @@ Integration tests validate the *real deployment interface* and ensure the contai
 
 ---
 
-## 3. **Deployment Tests**
+## 3. **Canary Release Tests**
 
-**Scope:** Full end-to-end validation of the Cog container environment; the same environment used by Replicate for production inference.
+**Scope:**  
+Live, production-facing validation of a newly deployed candidate by exercising the same inference surface used in production (Replicate), without rebuilding or re-running the container locally.
 
 **What they check:**
 
-* Container builds correctly (`cog build`)
-* Predictor boots and loads the real model
-* LoRA / sparsity / quantization branches run in realistic mode
-* GPU kernels, memory limits, and runtime stability
-* Performance characteristics (latency, throughput, warm/cold behavior)
+- The deployed predictor is callable and responds correctly via the Replicate API
+- The model loads successfully on real production GPUs
+- Optional runtime branches (e.g., LoRA switching, quantization, sparsity, multimodal paths) execute as expected
+- Output validity and quality (format, length, degeneration guards, semantic consistency)
+- Performance characteristics under real conditions (latency, cold vs warm behavior, relative throughput)
 
-**Why it matters:**
-These tests catch the issues that unit and integration tests *cannot*:
-CUDA mismatches, missing dependencies, broken model weights, or optional branches failing only at runtime.
+**What they intentionally do *not* check:**
 
-Deployment tests prove that the model will run reliably once shipped.
+- Local container builds (`cog build`)
+- Docker-in-Docker execution
+- Full offline benchmarks or stress tests
+
+Those concerns are handled earlier in the pipeline or in dedicated benchmarking workflows.
+
+**Why it matters:**  
+Canary release tests catch failures that only appear **after deployment**, such as:
+CUDA or driver incompatibilities, provider-side runtime issues, misconfigured optional branches, degraded output quality, or unexpected latency regressions.
+
+By comparing a candidate deployment against a pinned, known-good stable baseline, canary tests provide high-confidence assurance that the model can be safely promoted to production traffic.
+
 
 ---
 
@@ -100,7 +110,7 @@ Integration tests ensure your schema matches the live Replicate endpoint.
 
 ### **3. Reliable production deployments**
 
-Deployment tests validate the actual runtime environment: the place where most real errors occur.
+Canary tests validate the actual runtime environment: the place where most real errors occur.
 
 ### **4. Detects optional-path failures**
 
