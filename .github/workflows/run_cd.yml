@@ -1,4 +1,4 @@
-name: Continuous Deployment
+name: Continuous Deployment (CD)
 
 on:
   workflow_dispatch:
@@ -23,10 +23,9 @@ env:
 
 jobs:
   # --------------------------------------------------
-  # 🎯 Setup
+  # 🎯 Setup (resolve model matrix)
   # --------------------------------------------------
   setup:
-    name: 🎯 Setup
     runs-on: ubuntu-22.04
     outputs:
       models: ${{ steps.matrix.outputs.models }}
@@ -41,15 +40,25 @@ jobs:
           fi
 
   # --------------------------------------------------
-  # ✅ CI
+  # ✅ CI (per model, installs deps)
   # --------------------------------------------------
   ci:
-    name: ✅ CI
+    name: ✅ CI (${{ matrix.model }})
+    needs: setup
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
+    strategy:
+      matrix:
+        model: ${{ fromJson(needs.setup.outputs.models) }}
+      fail-fast: false
+
+    env:
+      MODEL_NAME: ${{ matrix.model }}
+
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -63,11 +72,11 @@ jobs:
       - run: make ci
 
   # --------------------------------------------------
-  # 🚀 Deploy
+  # 🚀 Deploy (per model)
   # --------------------------------------------------
   deploy:
     name: 🚀 Deploy (${{ matrix.model }})
-    needs: [ci, setup]
+    needs: [setup, ci]
     runs-on: ubuntu-22.04
     timeout-minutes: 60
 
@@ -80,9 +89,9 @@ jobs:
       candidate_model_id: ${{ steps.capture.outputs.candidate_model_id }}
 
     env:
+      MODEL_NAME: ${{ matrix.model }}
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      MODEL_NAME: ${{ matrix.model }}
 
     steps:
       - uses: jlumbroso/free-disk-space@main
@@ -91,6 +100,7 @@ jobs:
           large-packages: true
 
       - uses: actions/checkout@v5
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -120,9 +130,8 @@ jobs:
             exit 1
           fi
 
-          CANDIDATE="paragekbote/${MODEL_NAME}:${VERSION}"
-          echo "candidate_model_id=$CANDIDATE" >> $GITHUB_OUTPUT
-          echo "✅ Candidate model: $CANDIDATE"
+          echo "candidate_model_id=paragekbote/${MODEL_NAME}:${VERSION}" >> $GITHUB_OUTPUT
+          echo "✅ Candidate model: paragekbote/${MODEL_NAME}:${VERSION}"
 
   # --------------------------------------------------
   # 🧪 Integration
@@ -139,12 +148,13 @@ jobs:
       fail-fast: false
 
     env:
-      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       MODEL_NAME: ${{ matrix.model }}
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       CANDIDATE_MODEL_ID: ${{ needs.deploy.outputs.candidate_model_id }}
 
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -167,12 +177,13 @@ jobs:
       fail-fast: false
 
     env:
-      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       MODEL_NAME: ${{ matrix.model }}
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       CANDIDATE_MODEL_ID: ${{ needs.deploy.outputs.candidate_model_id }}
 
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -182,7 +193,7 @@ jobs:
       - name: Validate stable baselines (warn-only)
         run: |
           python scripts/validate_stable_and_candidate.py >> $GITHUB_ENV || \
-          echo "⚠️  Stable baseline validation failed — canary may be degraded"
+          echo "⚠️ Stable baseline validation failed — canary may be degraded"
 
       - run: make canary
 
@@ -190,7 +201,7 @@ jobs:
   # 🎉 Summary
   # --------------------------------------------------
   summary:
-    name: 🎉 Summary
+    name: Summary
     needs: [deploy, integration, canary]
     runs-on: ubuntu-22.04
     if: always()
