@@ -40,7 +40,7 @@ jobs:
           fi
 
   # --------------------------------------------------
-  # ✅ CI (per model, installs deps)
+  # ✅ CI
   # --------------------------------------------------
   ci:
     name: ✅ CI (${{ matrix.model }})
@@ -58,21 +58,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-
+          key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
       - run: make install-deps
       - run: make ci
 
   # --------------------------------------------------
-  # 🚀 Deploy (per model)
+  # 🚀 Deploy
   # --------------------------------------------------
   deploy:
     name: 🚀 Deploy (${{ matrix.model }})
@@ -86,7 +83,7 @@ jobs:
       fail-fast: false
 
     outputs:
-      candidate_model_id: ${{ steps.capture.outputs.candidate_model_id }}
+      candidate_model_id: ${{ steps.deploy.outputs.candidate_model_id }}
 
     env:
       MODEL_NAME: ${{ matrix.model }}
@@ -105,7 +102,6 @@ jobs:
           swap-storage: true
 
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -114,33 +110,34 @@ jobs:
         uses: replicate/setup-cog@v2
         with:
           cog-version: "v0.16.9"
-          token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN}}
+          token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
       - run: make install-deps
+
       - name: Deploy model
+        id: deploy
         env:
           MODEL_NAME: ${{ matrix.model }}
-          REPLICATE_CLI_AUTH_TOKEN : ${{ secrets.REPLICATE_CLI_AUTH_TOKEN}}
-        run: make deploy
-
-      - name: Install Replicate CLI
+          REPLICATE_CLI_AUTH_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
         run: |
-          pip install replicate
+          MODEL_ID=$(make deploy | sed -n 's/^MODEL_ID=//p')
+          if [ -z "$MODEL_ID" ]; then
+            echo "ERROR: Failed to capture deployed MODEL_ID"
+            exit 1
+          fi
+          echo "candidate_model_id=$MODEL_ID" >> "$GITHUB_OUTPUT"
+          echo "Deployed candidate: $MODEL_ID"
 
-      - name: Capture deployed model version and run tests
-        id: capture
-        run: python scripts/get_deployed_version.py >> $GITHUB_ENV
-        env:
-          MODEL_NAME:  ${{ matrix.model }}
-          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
   # --------------------------------------------------
   # 🧪 Integration
   # --------------------------------------------------
   integration:
-    name: 🧪 Integration (${{ matrix.model }})
+    name: 🧪 Run Integration Tests (${{ matrix.model }})
     needs: [setup, deploy]
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -157,11 +154,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
       - run: make install-deps
       - run: make integration
 
@@ -169,7 +168,7 @@ jobs:
   # 🐦 Canary
   # --------------------------------------------------
   canary:
-    name: 🐦 Canary (${{ matrix.model }})
+    name: 🐦 Run Canary Tests (${{ matrix.model }})
     needs: [setup, deploy, integration]
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -186,18 +185,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+
+      - name: Verify candidate model id
+        run: |
+          if [ -z "${CANDIDATE_MODEL_ID}" ]; then
+            echo "ERROR: CANDIDATE_MODEL_ID is not set"
+            exit 1
+          fi
 
       - run: make install-deps
-
-      - name: Validate stable baselines (warn-only)
-        run: |
-          python scripts/validate_stable_and_candidate.py >> $GITHUB_ENV || \
-          echo "⚠️ Stable baseline validation failed — canary may be degraded"
-
       - run: make canary
 
   # --------------------------------------------------

@@ -95,20 +95,21 @@ endif
 
 	@echo "🔨 Building $(MODEL_NAME)..."
 
-	# Map model name to directory (hyphens → underscores)
 	@MODEL_DIR=src/models/$$(echo "$(MODEL_NAME)" | tr '-' '_'); \
 	if [ ! -f "$$MODEL_DIR/cog.yaml" ]; then \
 		echo "❌ cog.yaml not found at $$MODEL_DIR/cog.yaml"; \
 		exit 1; \
 	fi; \
 	cd $$MODEL_DIR && \
-	cog push r8.im/$(USERNAME)/$(MODEL_NAME)
-
-	@echo "✅ Build complete"
+	VERSION=$$(cog push r8.im/$(USERNAME)/$(MODEL_NAME) | tail -n 1); \
+	echo "MODEL_ID=$(USERNAME)/$(MODEL_NAME):$$VERSION"; \
+	echo "MODEL_ID=$(USERNAME)/$(MODEL_NAME):$$VERSION" > /tmp/model_id.txt
 
 .PHONY: deploy
 deploy: build ## Build and deploy model
-	@echo "🚀 Deployed r8.im/$(USERNAME)/$(MODEL_NAME)"
+	@MODEL_ID=$$(cat /tmp/model_id.txt | cut -d= -f2); \
+	echo "🚀 Deployed $$MODEL_ID"; \
+	echo "MODEL_ID=$$MODEL_ID"
 
 # --------------------------------------------------
 # 🧪 Tests

@@ -9,12 +9,13 @@ from sentence_transformers import SentenceTransformer
 from utils import run_and_time
 
 # ---------------------------------------------------------------------
-# Configuration
+# Configuration (intentionally pinned)
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/phi-4-reasoning-plus-unsloth"
 TARGET_MODEL = "phi-4-reasoning-plus-unsloth"
-STABLE_PHI4_MODEL_ID = os.environ.get("STABLE_PHI4_MODEL_ID")
+
+STABLE_MODEL_ID = "paragekbote/phi-4-reasoning-plus-unsloth:22438984324149ef4ecfcea3d631185641c23e46ce526ae4439b8c89c27ac086"
 
 MIN_OUTPUT_CHARS = 120
 MIN_LENGTH_RATIO = 0.4
@@ -40,7 +41,6 @@ CANARY_CASES: list[dict] = [
     },
 ]
 
-
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
@@ -56,6 +56,21 @@ def get_latest_model_id() -> str:
     return f"{MODEL_BASE}:{versions[0].id}"
 
 
+def get_candidate_model_id() -> str:
+    """
+    Resolve the candidate model ID for canary testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest Replicate version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    return get_latest_model_id()
+
+
 def normalize_text(text: str) -> str:
     return " ".join(text.strip().split())
 
@@ -68,7 +83,7 @@ def normalize_text(text: str) -> str:
 @pytest.mark.canary
 @pytest.mark.skipif(
     os.environ.get("MODEL_NAME") != TARGET_MODEL,
-    reason="Not the target model for this integration test",
+    reason="Not the target model for this canary test",
 )
 def test_canary_phi4_reasoning():
     """
@@ -79,25 +94,30 @@ def test_canary_phi4_reasoning():
       - verbosity regressions
       - semantic drift
 
-    Behavior:
-      - FAIL if misconfigured
-      - PASS explicitly if candidate == stable
-      - FAIL on regression
+    Contract:
+      - CI must pass CANDIDATE_MODEL_ID explicitly
+      - Local runs fall back to latest published version
+      - Only runtime inference credentials are used
     """
 
     # --------------------------------------------------
-    # Hard requirements (fail fast)
+    # Environment hygiene (fail fast)
     # --------------------------------------------------
-    assert STABLE_PHI4_MODEL_ID, "STABLE_PHI4_MODEL_ID must be set"
+    assert os.environ.get("REPLICATE_API_TOKEN"), "REPLICATE_API_TOKEN must be set"
 
-    candidate_id = get_latest_model_id()
+    assert os.environ.get("REPLICATE_CLI_AUTH_TOKEN") is None, "CLI auth must not be set during canary tests"
+
+    assert os.environ.get("HF_TOKEN") is None, "HF auth must not be required for canary tests"
+
+    assert STABLE_MODEL_ID, "Stable model ID must be pinned"
+
+    candidate_id = get_candidate_model_id()
 
     # --------------------------------------------------
-    # No-op canary (explicit pass)
+    # Explicit no-op canary
     # --------------------------------------------------
-    if candidate_id == STABLE_PHI4_MODEL_ID:
-        assert True, "No-op canary: candidate model equals stable model (nothing new to compare)"
-        return
+    if candidate_id == STABLE_MODEL_ID:
+        pytest.skip("No-op canary: candidate model equals stable model")
 
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -106,7 +126,7 @@ def test_canary_phi4_reasoning():
         # Baseline vs candidate
         # ------------------------------
         old_text, _ = run_and_time(
-            STABLE_PHI4_MODEL_ID,
+            STABLE_MODEL_ID,
             case["input"],
         )
         new_text, _ = run_and_time(

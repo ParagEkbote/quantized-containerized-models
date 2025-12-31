@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # -----------------------------------------------------
-# Deployment ID (PINNED)
+# Model configuration (intentionally pinned)
 # -----------------------------------------------------
-MODEL_ID = "paragekbote/gemma3-torchao-quant-sparse"
-TARGET_MODEL = "gemma-torchao"
+MODEL_BASE_ID = "paragekbote/gemma3-torchao-quant-sparse"
+TARGET_MODEL = "gemma3-torchao-quant-sparse"
 
 
 # -----------------------------------------------------
@@ -34,6 +34,28 @@ BASE_INPUT = {
 }
 
 
+# -----------------------------------------------------
+# Helpers
+# -----------------------------------------------------
+def get_candidate_model_id() -> str:
+    """
+    Resolve the model ID for integration testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest published version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    logger.info("CANDIDATE_MODEL_ID not set; resolving latest version for %s", MODEL_BASE_ID)
+    return resolve_latest_version_httpx(MODEL_BASE_ID)
+
+
+# -----------------------------------------------------
+# Integration test
+# -----------------------------------------------------
 @pytest.mark.integration
 @pytest.mark.slow
 @pytest.mark.skipif(
@@ -46,13 +68,24 @@ BASE_INPUT = {
 )
 def test_gemma_torchao_two_paths():
     """
-    Integration test for Gemma TorchAO predictor:
-    - Call 1: quantization enabled, NO sparsity
-    - Call 2: quantization disabled, sparsity enabled
+    Integration test for Gemma TorchAO predictor.
+
+    Validates:
+      - Quantization-only execution path
+      - Sparsity-only execution path
+      - End-to-end inference correctness
+      - Reasonable latency behavior between modes
     """
-    logger.info("Resolving latest model version: %s", MODEL_ID)
-    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
-    logger.info("Resolved model version: %s", resolved_model_id)
+
+    # --------------------------------------------------
+    # Environment contract (CI safety)
+    # --------------------------------------------------
+    if os.environ.get("CI"):
+        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI integration tests"
+
+    resolved_model_id = get_candidate_model_id()
+    logger.info("Using model ID for integration test: %s", resolved_model_id)
+
     # --------------------------
     # Request 1 — Quantization
     # --------------------------
@@ -107,7 +140,7 @@ def test_gemma_torchao_two_paths():
     assert 0.2 < ratio < 5.0, f"Unexpected latency ratio: {ratio:.2f}"
 
     logger.info(
-        "Test completed successfully | quant=%.2fs sparse=%.2fs ratio=%.2f",
+        "Integration test passed | quant=%.2fs sparse=%.2fs ratio=%.2f",
         t1,
         t2,
         ratio,

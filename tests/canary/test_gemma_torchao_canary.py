@@ -13,8 +13,9 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/gemma3-torchao-quant-sparse"
-TARGET_MODEL = "gemma-torchao"
-STABLE_GEMMA_TORCHAO_MODEL_ID = os.environ.get("STABLE_GEMMA_TORCHAO_MODEL_ID")
+TARGET_MODEL = "gemma3-torchao-quant-sparse"
+
+STABLE_GEMMA_TORCHAO_MODEL_ID = "paragekbote/gemma3-torchao-quant-sparse:396049cbfd6b79f8422fe41152aa2c0a0ddc0a602d21efb6dfd49c23799f7d74"
 
 MIN_OUTPUT_CHARS = 120
 MIN_LENGTH_RATIO = 0.4
@@ -25,7 +26,7 @@ CANARY_CASES: list[dict] = [
     {
         "name": "text_only_reasoning",
         "input": {
-            "prompt": ("Explain why gradient clipping can stabilize training in deep neural networks."),
+            "prompt": "Explain why gradient clipping can stabilize training in deep neural networks.",
             "temperature": 1.4,
             "use_quantization": True,
             "use_sparsity": False,
@@ -36,7 +37,7 @@ CANARY_CASES: list[dict] = [
     {
         "name": "image_conditioned_reasoning",
         "input": {
-            "prompt": ("Describe the scene and explain what the image suggests about the environment."),
+            "prompt": "Describe the scene and explain what the image suggests about the environment.",
             "image_url": ("https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/512px-Fronalpstock_big.jpg"),
             "temperature": 1.5,
             "use_quantization": True,
@@ -47,13 +48,15 @@ CANARY_CASES: list[dict] = [
     },
 ]
 
-
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
 
 
 def get_latest_and_previous_model_ids() -> tuple[str, str | None]:
+    """
+    Resolve latest + previous published versions (fallback path only).
+    """
     if not os.environ.get("REPLICATE_API_TOKEN"):
         raise RuntimeError("REPLICATE_API_TOKEN not set")
 
@@ -64,6 +67,22 @@ def get_latest_and_previous_model_ids() -> tuple[str, str | None]:
     latest = f"{MODEL_BASE}:{versions[0].id}"
     previous = f"{MODEL_BASE}:{versions[1].id}" if len(versions) > 1 else None
     return latest, previous
+
+
+def get_candidate_model_id() -> str:
+    """
+    Resolve candidate model ID for canary testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest published version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    latest, _ = get_latest_and_previous_model_ids()
+    return latest
 
 
 def normalize_text(text: str) -> str:
@@ -85,7 +104,6 @@ def multimodal_text_validator(text: str) -> None:
     Ensure the image pathway actually contributed.
     """
     lowered = text.lower()
-
     vision_tokens = [
         "image",
         "scene",
@@ -99,7 +117,7 @@ def multimodal_text_validator(text: str) -> None:
     ]
 
     hits = [tok for tok in vision_tokens if tok in lowered]
-    assert hits, "Multimodal output does not reference visual content (image conditioning likely ignored)"
+    assert hits, "Multimodal output does not reference visual content"
 
     print(f"[CANARY] Vision grounding tokens detected: {hits}")
 
@@ -112,22 +130,30 @@ def multimodal_text_validator(text: str) -> None:
 @pytest.mark.canary
 @pytest.mark.skipif(
     os.environ.get("MODEL_NAME") != TARGET_MODEL,
-    reason="Not the target model for this integration test",
+    reason="Not the target model for this canary test",
 )
 def test_canary_gemma_torchao():
     """
     Canary release test for Gemma-3 VLM with torchao quantization.
 
     Behavior:
-      - If stable != latest: compare stable → latest
-      - If stable == latest: compare previous → latest
-      - If only one version exists: skip honestly
+      - CI: compares baseline → deployed candidate
+      - Stable != candidate → stable → candidate
+      - Stable == candidate → previous → candidate
+      - Single version → honest skip
     """
+
+    # --------------------------------------------------
+    # CI safety
+    # --------------------------------------------------
+    if os.environ.get("CI"):
+        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI canary tests"
 
     if not STABLE_GEMMA_TORCHAO_MODEL_ID:
         pytest.skip("STABLE_GEMMA_TORCHAO_MODEL_ID not set")
 
-    candidate_id, previous_id = get_latest_and_previous_model_ids()
+    candidate_id = get_candidate_model_id()
+    latest_id, previous_id = get_latest_and_previous_model_ids()
 
     # --------------------------------------------------
     # Decide baseline
@@ -137,7 +163,7 @@ def test_canary_gemma_torchao():
             pytest.skip("Only one model version exists; no baseline for canary")
 
         baseline_id = previous_id
-        print("[CANARY] No new stable detected. Falling back to previous version comparison.")
+        print("[CANARY] Stable == candidate; using previous version as baseline")
     else:
         baseline_id = STABLE_GEMMA_TORCHAO_MODEL_ID
 
@@ -150,10 +176,7 @@ def test_canary_gemma_torchao():
         timeout = 120.0 if case["is_multimodal"] else 90.0
         validator = multimodal_text_validator if case["is_multimodal"] else None
 
-        if case["is_multimodal"]:
-            print(f"[CANARY] Running IMAGE-conditioned case: {case['name']}")
-        else:
-            print(f"[CANARY] Running TEXT-only case: {case['name']}")
+        print(f"[CANARY] Running {'IMAGE' if case['is_multimodal'] else 'TEXT'} case: {case['name']}")
 
         # ------------------------------
         # Baseline run
@@ -200,17 +223,15 @@ def test_canary_gemma_torchao():
         assert rep > 0.35, f"{case['name']} excessive repetition detected: {rep:.2f}"
 
         # --------------------------------------------------
-        # Semantic similarity (SentenceTransformer)
+        # Semantic similarity
         # --------------------------------------------------
-        print(f"[CANARY] Computing embeddings for {case['name']}")
-
         old_emb = embedder.encode(old_text, normalize_embeddings=True)
         new_emb = embedder.encode(new_text, normalize_embeddings=True)
 
         similarity = float(np.dot(old_emb, new_emb))
         print(f"[CANARY] {case['name']} similarity = {similarity:.3f}")
 
-        # Extra guard: image must matter
+        # Extra multimodal guard
         if case["is_multimodal"]:
             assert similarity < 0.9999, f"{case['name']} output appears image-insensitive"
 

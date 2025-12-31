@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # ----------------------------------------------------
-# Deployment ID (PINNED)
+# Model configuration
 # ----------------------------------------------------
-MODEL_ID = "paragekbote/smollm3-3b-smashed"
-TARGET_MODEL = "smollm3-pruna"
+MODEL_BASE_ID = "paragekbote/smollm3-3b-smashed"
+TARGET_MODEL = "smollm3-3b-smashed"
 
 # ----------------------------------------------------
 # Base input (TEXT SAFE)
@@ -30,6 +30,31 @@ BASE_INPUT = {
 }
 
 
+# ----------------------------------------------------
+# Helpers
+# ----------------------------------------------------
+def get_candidate_model_id() -> str:
+    """
+    Resolve the model ID for integration testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest published version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    logger.info(
+        "CANDIDATE_MODEL_ID not set; resolving latest version for %s",
+        MODEL_BASE_ID,
+    )
+    return resolve_latest_version_httpx(MODEL_BASE_ID)
+
+
+# ----------------------------------------------------
+# Integration test
+# ----------------------------------------------------
 @pytest.mark.integration
 @pytest.mark.slow
 @pytest.mark.skipif(
@@ -43,20 +68,23 @@ BASE_INPUT = {
 def test_replicate_two_modes():
     """
     Integration test:
-    - mode='no_think'
-    - mode='think'
+      - mode='no_think'
+      - mode='think'
 
     Verifies:
-    - both execution modes run successfully
-    - output is valid text
-    - latency characteristics are reasonable
+      - both execution modes run successfully
+      - output is valid text
+      - latency characteristics are reasonable
     """
-    logger.info("Resolving latest model version: %s", MODEL_ID)
-    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
-    logger.info("Resolved model version: %s", resolved_model_id)
 
-    logger.info("Starting integration test")
-    logger.info("Deployment ID: %s", MODEL_ID)
+    # --------------------------------------------------
+    # CI safety: enforce deployment-scoped testing
+    # --------------------------------------------------
+    if os.environ.get("CI"):
+        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI integration tests"
+
+    resolved_model_id = get_candidate_model_id()
+    logger.info("Using model ID for integration test: %s", resolved_model_id)
 
     results = []
 
@@ -75,7 +103,6 @@ def test_replicate_two_modes():
         logger.info("Mode=%s completed in %.2fs", mode, elapsed)
         logger.info("Output preview (%s): %r", mode, text[:120])
 
-        # Basic validity checks
         assert isinstance(text, str)
         assert len(text.strip()) > 20, f"Output too short for mode={mode}"
 
@@ -86,14 +113,12 @@ def test_replicate_two_modes():
     # ----------------------------------------------------
     (_, text1, time1), (_, text2, time2) = results
 
-    # Do NOT require different text (not guaranteed)
     assert len(text1.strip()) > 20
     assert len(text2.strip()) > 20
 
-    # Latency ratio sanity check (very loose by design)
     ratio = time1 / time2 if time2 > 0 else float("inf")
     logger.info("Latency ratio (no_think / think) = %.2f", ratio)
 
     assert 0.2 < ratio < 5.0, f"Unexpected latency ratio: {ratio:.2f}"
 
-    logger.info("Integration test completed successfully.")
+    logger.info("SmolLM3 integration test completed successfully.")

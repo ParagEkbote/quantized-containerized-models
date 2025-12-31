@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # -----------------------------------------------------
-# Deployment ID (PINNED)
+# Model configuration
 # -----------------------------------------------------
-MODEL_ID = "paragekbote/flux-fast-lora-hotswap-img2img"
+MODEL_BASE_ID = "paragekbote/flux-fast-lora-hotswap-img2img"
 TARGET_MODEL = "flux-fast-lora-hotswap-img2img"
 
 # -----------------------------------------------------
@@ -31,6 +31,31 @@ BASE_INPUT = {
 }
 
 
+# -----------------------------------------------------
+# Helpers
+# -----------------------------------------------------
+def get_candidate_model_id() -> str:
+    """
+    Resolve the model ID for integration testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest published version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    logger.info(
+        "CANDIDATE_MODEL_ID not set; resolving latest version for %s",
+        MODEL_BASE_ID,
+    )
+    return resolve_latest_version_httpx(MODEL_BASE_ID)
+
+
+# -----------------------------------------------------
+# Integration test
+# -----------------------------------------------------
 @pytest.mark.integration
 @pytest.mark.slow
 @pytest.mark.skipif(
@@ -49,13 +74,19 @@ def test_flux_fast_lora_img2img_two_adapters():
     - Call 2: trigger_word='GHIBSKY' (flux-ghibsky)
 
     Verifies:
-    - both adapters run successfully
-    - valid image outputs are produced
-    - latency characteristics are reasonable
+      - LoRA adapter switching works
+      - Valid image outputs are produced
+      - Latency characteristics are reasonable
     """
-    logger.info("Resolving latest model version: %s", MODEL_ID)
-    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
-    logger.info("Resolved model version: %s", resolved_model_id)
+
+    # --------------------------------------------------
+    # CI safety: enforce deployment-scoped testing
+    # --------------------------------------------------
+    if os.environ.get("CI"):
+        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI integration tests"
+
+    resolved_model_id = get_candidate_model_id()
+    logger.info("Using model ID for integration test: %s", resolved_model_id)
 
     requests = [
         {**BASE_INPUT, "trigger_word": "Anime"},
@@ -65,7 +96,8 @@ def test_flux_fast_lora_img2img_two_adapters():
     results = []
 
     for req in requests:
-        logger.info("Calling model with trigger_word=%s", req["trigger_word"])
+        trigger = req["trigger_word"]
+        logger.info("Calling model with trigger_word=%s", trigger)
         logger.info("Input params: %s", req)
 
         output, elapsed = run_image_and_time(
@@ -76,7 +108,7 @@ def test_flux_fast_lora_img2img_two_adapters():
 
         logger.info(
             "Completed trigger_word=%s in %.2fs",
-            req["trigger_word"],
+            trigger,
             elapsed,
         )
         logger.info("Output: %s", output)
@@ -85,7 +117,7 @@ def test_flux_fast_lora_img2img_two_adapters():
         assert isinstance(output, str)
         assert output.startswith("http") or output.endswith(".png"), f"Unexpected output format: {output}"
 
-        results.append((req["trigger_word"], output, elapsed))
+        results.append((trigger, output, elapsed))
 
     # -----------------------------------------------------
     # Cross-run checks
@@ -95,7 +127,6 @@ def test_flux_fast_lora_img2img_two_adapters():
     # Adapter switching signal (reasonable for image LoRAs)
     assert img1 != img2, "LoRA adapter switching did not produce distinct outputs (possible adapter misrouting)"
 
-    # Latency sanity check (loose by design)
     ratio = t1 / t2 if t2 > 0 else float("inf")
     logger.info("Latency ratio (%s / %s) = %.2f", mode1, mode2, ratio)
 

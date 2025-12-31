@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # -----------------------------------------------------
-# Model ID (not deployment)
+# Model configuration
 # -----------------------------------------------------
-MODEL_ID = "paragekbote/phi-4-reasoning-plus-unsloth"
+MODEL_BASE_ID = "paragekbote/phi-4-reasoning-plus-unsloth"
 TARGET_MODEL = "phi-4-reasoning-plus-unsloth"
 
 # -----------------------------------------------------
@@ -27,6 +27,31 @@ BASE_INPUT = {
 }
 
 
+# -----------------------------------------------------
+# Helpers
+# -----------------------------------------------------
+def get_candidate_model_id() -> str:
+    """
+    Resolve the model ID for integration testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest published version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    logger.info(
+        "CANDIDATE_MODEL_ID not set; resolving latest version for %s",
+        MODEL_BASE_ID,
+    )
+    return resolve_latest_version_httpx(MODEL_BASE_ID)
+
+
+# -----------------------------------------------------
+# Integration test
+# -----------------------------------------------------
 @pytest.mark.integration
 @pytest.mark.slow
 @pytest.mark.skipif(
@@ -39,46 +64,52 @@ BASE_INPUT = {
 )
 def test_phi4_two_sampling_modes():
     """
-    Integration test for Unsloth Phi-4 reasoning predictor:
-    - Call 1: stable sampling (low temperature, high top_p)
-    - Call 2: creative sampling (high temperature, low top_p)
+    Integration test for Unsloth Phi-4 reasoning predictor.
 
     Verifies:
-    - both configurations run successfully
-    - valid text output is produced
-    - latency characteristics are sane
+      - stable vs creative sampling both execute
+      - valid text output is produced
+      - latency characteristics are sane
     """
-    # Resolve the latest model version (not deployment)
-    logger.info("Resolving latest model version: %s", MODEL_ID)
-    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
-    logger.info("Resolved model version: %s", resolved_model_id)
+
+    # --------------------------------------------------
+    # CI safety: enforce deployment-scoped testing
+    # --------------------------------------------------
+    if os.environ.get("CI"):
+        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI integration tests"
+
+    resolved_model_id = get_candidate_model_id()
+    logger.info("Using model ID for integration test: %s", resolved_model_id)
 
     calls = [
-        {
-            **BASE_INPUT,
-            "temperature": 0.3,
-            "top_p": 0.95,
-            "top_k": 60,
-        },
-        {
-            **BASE_INPUT,
-            "temperature": 0.9,
-            "top_p": 0.5,
-            "top_k": 35,
-        },
+        (
+            "stable",
+            {
+                **BASE_INPUT,
+                "temperature": 0.3,
+                "top_p": 0.95,
+                "top_k": 60,
+            },
+        ),
+        (
+            "creative",
+            {
+                **BASE_INPUT,
+                "temperature": 0.9,
+                "top_p": 0.5,
+                "top_k": 35,
+            },
+        ),
     ]
 
     results = []
 
-    for cfg in calls:
-        label = cfg.pop("label")
-
+    for label, cfg in calls:
         logger.info("Calling Phi-4 with %s sampling", label)
         logger.info("Input params: %s", cfg)
 
-        # Use the resolved model version (with hash)
         text, elapsed = run_and_time(
-            resolved_model_id,  # This includes the version hash
+            resolved_model_id,
             cfg,
             timeout_s=180.0,
         )
@@ -86,7 +117,6 @@ def test_phi4_two_sampling_modes():
         logger.info("%s sampling completed in %.2fs", label, elapsed)
         logger.info("Output preview (%s): %r", label, text[:120])
 
-        # Basic validity checks
         assert isinstance(text, str)
         assert len(text.strip()) > 20, f"Output too short for {label} sampling"
 
@@ -97,11 +127,9 @@ def test_phi4_two_sampling_modes():
     # -----------------------------------------------------
     (_, out1, t1), (_, out2, t2) = results
 
-    # Do NOT require different text (not guaranteed)
     assert len(out1.strip()) > 20
     assert len(out2.strip()) > 20
 
-    # Latency ratio sanity check (loose by design)
     ratio = t1 / t2 if t2 > 0 else float("inf")
     logger.info("Latency ratio (stable / creative) = %.2f", ratio)
 

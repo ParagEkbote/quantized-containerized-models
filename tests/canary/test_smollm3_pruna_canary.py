@@ -13,8 +13,9 @@ from utils import run_and_time
 # ---------------------------------------------------------------------
 
 MODEL_BASE = "paragekbote/smollm3-3b-smashed"
-TARGET_MODEL = "smollm3-pruna"
-STABLE_SMOLLM3_MODEL_ID = os.environ.get("STABLE_SMOLLM3_MODEL_ID")
+TARGET_MODEL = "smollm3-3b-smashed"
+
+STABLE_SMOLLM3_MODEL_ID = "paragekbote/smollm3-3b-smashed:232b6f87dac025cb54803cfbc52135ab8366c21bbe8737e11cd1aee4bf3a2423"
 
 MIN_OUTPUT_CHARS = 150
 MIN_LENGTH_RATIO = 0.4
@@ -25,7 +26,7 @@ CANARY_CASES: list[dict] = [
     {
         "name": "no_think_reasoning",
         "input": {
-            "prompt": ("Why does increasing batch size sometimes reduce training stability?"),
+            "prompt": "Why does increasing batch size sometimes reduce training stability?",
             "mode": "no_think",
             "seed": 42,
         },
@@ -33,13 +34,12 @@ CANARY_CASES: list[dict] = [
     {
         "name": "think_reasoning",
         "input": {
-            "prompt": ("Explain the difference between quantization and pruning in neural networks."),
+            "prompt": "Explain the difference between quantization and pruning in neural networks.",
             "mode": "think",
             "seed": 42,
         },
     },
 ]
-
 
 # ---------------------------------------------------------------------
 # Helpers
@@ -47,13 +47,31 @@ CANARY_CASES: list[dict] = [
 
 
 def get_latest_model_id() -> str:
-    assert os.environ.get("REPLICATE_API_TOKEN"), "REPLICATE_API_TOKEN must be set to run canary tests"
+    """
+    Resolve the latest published model version (local fallback only).
+    """
+    assert os.environ.get("REPLICATE_API_TOKEN"), "REPLICATE_API_TOKEN must be set to resolve latest model version"
 
     model = replicate.models.get(MODEL_BASE)
     versions = list(model.versions.list())
     versions.sort(key=lambda v: v.created_at, reverse=True)
 
     return f"{MODEL_BASE}:{versions[0].id}"
+
+
+def get_candidate_model_id() -> str:
+    """
+    Resolve candidate model ID for canary testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest published version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    return get_latest_model_id()
 
 
 def normalize_text(text: str) -> str:
@@ -84,7 +102,7 @@ def repetition_ratio(text: str) -> float:
 @pytest.mark.canary
 @pytest.mark.skipif(
     os.environ.get("MODEL_NAME") != TARGET_MODEL,
-    reason="Not the target model for this integration test",
+    reason="Not the target model for this canary test",
 )
 def test_canary_smollm3_pruna():
     """
@@ -96,25 +114,26 @@ def test_canary_smollm3_pruna():
       - smashed-model repetition
       - semantic drift
 
-    Behavior:
-      - FAIL if misconfigured
-      - PASS explicitly if candidate == stable
-      - FAIL on regression
+    Contract:
+      - CI must pass CANDIDATE_MODEL_ID
+      - Local runs fall back to latest published version
     """
 
     # --------------------------------------------------
-    # Hard requirements (fail fast)
+    # CI safety: enforce deployment-scoped canary
     # --------------------------------------------------
-    assert STABLE_SMOLLM3_MODEL_ID, "STABLE_SMOLLM3_MODEL_ID must be set"
+    if os.environ.get("CI"):
+        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI canary tests"
 
-    candidate_id = get_latest_model_id()
+    assert STABLE_SMOLLM3_MODEL_ID, "Stable SmolLM3 model ID must be pinned"
+
+    candidate_id = get_candidate_model_id()
 
     # --------------------------------------------------
-    # No-op canary (explicit pass)
+    # Explicit no-op canary
     # --------------------------------------------------
     if candidate_id == STABLE_SMOLLM3_MODEL_ID:
-        assert True, "No-op canary: candidate model equals stable model (nothing new to compare)"
-        return
+        pytest.skip("No-op canary: candidate model equals stable model")
 
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 

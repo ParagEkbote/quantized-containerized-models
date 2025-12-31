@@ -19,11 +19,10 @@ from utils import run_image_and_time
 MODEL_BASE = "paragekbote/flux-fast-lora-hotswap"
 TARGET_MODEL = "flux-fast-lora-hotswap"
 
-STABLE_FLUX_MODEL_ID = os.environ.get("STABLE_FLUX_MODEL_ID")
+STABLE_FLUX_MODEL_ID = "paragekbote/flux-fast-lora-hotswap:ca315a7351d15d3c813e6c71ba26c540893961932c3791e05101596c93502e94"
 
 PHASH_MAX_DISTANCE = 16
 TIMM_MIN_SIMILARITY = 0.85  # slightly looser than CLIP
-
 
 CANARY_CASES: list[dict] = [
     {
@@ -46,13 +45,15 @@ CANARY_CASES: list[dict] = [
     },
 ]
 
-
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
 
 
 def get_latest_model_id() -> str:
+    """
+    Local fallback only.
+    """
     if not os.environ.get("REPLICATE_API_TOKEN"):
         raise RuntimeError("REPLICATE_API_TOKEN not set")
 
@@ -61,6 +62,21 @@ def get_latest_model_id() -> str:
     versions.sort(key=lambda v: v.created_at, reverse=True)
 
     return f"{MODEL_BASE}:{versions[0].id}"
+
+
+def get_candidate_model_id() -> str:
+    """
+    Resolve candidate model ID for canary testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest published version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    return get_latest_model_id()
 
 
 def assert_image_sanity(img: Image.Image) -> None:
@@ -82,7 +98,7 @@ class TimmEmbedder:
         self.model = timm.create_model(
             model_name,
             pretrained=True,
-            num_classes=0,  # feature extractor
+            num_classes=0,
         ).to(self.device)
         self.model.eval()
 
@@ -118,11 +134,11 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 @pytest.mark.canary
 @pytest.mark.skipif(
     os.environ.get("MODEL_NAME") != TARGET_MODEL,
-    reason="Not the target model for this integration test",
+    reason="Not the target model for this canary test",
 )
 def test_canary_release_flux():
     """
-    Canary test for Flux img2img deployments.
+    Canary test for Flux txt2img deployments.
 
     Guards against:
       - structural regressions (pHash)
@@ -130,22 +146,20 @@ def test_canary_release_flux():
     """
 
     # --------------------------------------------------
-    # Hard requirements (fail fast)
+    # CI safety
     # --------------------------------------------------
-    assert os.environ.get("REPLICATE_API_TOKEN"), "REPLICATE_API_TOKEN must be set to run canary tests"
+    if os.environ.get("CI"):
+        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI canary tests"
 
-    assert STABLE_FLUX_MODEL_ID, "STABLE_FLUX_MODEL_ID must be set"
+    assert STABLE_FLUX_MODEL_ID, "Stable Flux model ID must be pinned"
 
-    candidate_id = os.environ.get("CANDIDATE_MODEL_ID")
-    if not candidate_id:
-        pytest.skip("Candidate model ID not provided by pipeline")
+    candidate_id = get_candidate_model_id()
 
     # --------------------------------------------------
-    # No-op canary (explicit pass)
+    # No-op canary
     # --------------------------------------------------
     if candidate_id == STABLE_FLUX_MODEL_ID:
-        assert True, "No-op canary: candidate model equals stable model (nothing new to compare)"
-        return
+        pytest.skip("No-op canary: candidate model equals stable model")
 
     embedder = TimmEmbedder()
 
@@ -167,7 +181,7 @@ def test_canary_release_flux():
         assert_image_sanity(new_img)
 
         # ------------------------------
-        # Structural regression
+        # Structural regression (pHash)
         # ------------------------------
         p_dist = imagehash.phash(old_img) - imagehash.phash(new_img)
         assert p_dist <= PHASH_MAX_DISTANCE, f"{case['name']} pHash drift too high: {p_dist}"

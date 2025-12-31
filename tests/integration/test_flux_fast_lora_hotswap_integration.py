@@ -3,7 +3,10 @@ import os
 
 import pytest
 
-from integration.utils import resolve_latest_version_httpx, run_image_and_time
+from integration.utils import (
+    resolve_latest_version_httpx,
+    run_image_and_time,
+)
 
 # -----------------------------------------------------
 # Logging configuration
@@ -12,9 +15,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # -----------------------------------------------------
-# Deployment ID (FULLY QUALIFIED & PINNED)
+# Model configuration
 # -----------------------------------------------------
-MODEL_ID = "paragekbote/flux-fast-lora-hotswap"
+MODEL_BASE_ID = "paragekbote/flux-fast-lora-hotswap"
 TARGET_MODEL = "flux-fast-lora-hotswap"
 
 # -----------------------------------------------------
@@ -27,6 +30,31 @@ BASE_REQUEST = {
 }
 
 
+# -----------------------------------------------------
+# Helpers
+# -----------------------------------------------------
+def get_candidate_model_id() -> str:
+    """
+    Resolve the model ID for integration testing.
+
+    Priority:
+      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
+      2. Latest published version (local fallback)
+    """
+    cid = os.environ.get("CANDIDATE_MODEL_ID")
+    if cid:
+        return cid
+
+    logger.info(
+        "CANDIDATE_MODEL_ID not set; resolving latest version for %s",
+        MODEL_BASE_ID,
+    )
+    return resolve_latest_version_httpx(MODEL_BASE_ID)
+
+
+# -----------------------------------------------------
+# Integration test
+# -----------------------------------------------------
 @pytest.mark.integration
 @pytest.mark.slow
 @pytest.mark.skipif(
@@ -40,17 +68,23 @@ BASE_REQUEST = {
 def test_flux_fast_lora_two_modes():
     """
     Integration test for Flux Fast LoRA model:
-    - First call triggers open-image-preferences (via 'Anime')
-    - Second call triggers flux-ghibsky (via 'GHIBSKY')
+      - Adapter 1: open-image-preferences (trigger='Anime')
+      - Adapter 2: flux-ghibsky (trigger='GHIBSKY')
 
     Verifies:
-    - both adapters run successfully
-    - valid image outputs are produced
-    - latency characteristics are reasonable
+      - LoRA adapter switching works
+      - Valid image outputs are produced
+      - Latency characteristics are reasonable
     """
-    logger.info("Resolving latest model version: %s", MODEL_ID)
-    resolved_model_id = resolve_latest_version_httpx(MODEL_ID)
-    logger.info("Resolved model version: %s", resolved_model_id)
+
+    # --------------------------------------------------
+    # CI safety: enforce deployment-scoped testing
+    # --------------------------------------------------
+    if os.environ.get("CI"):
+        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI integration tests"
+
+    resolved_model_id = get_candidate_model_id()
+    logger.info("Using model ID for integration test: %s", resolved_model_id)
 
     requests = [
         {**BASE_REQUEST, "trigger_word": "Anime"},
@@ -60,39 +94,32 @@ def test_flux_fast_lora_two_modes():
     results = []
 
     for req in requests:
-        logger.info("Calling model with trigger_word=%s", req["trigger_word"])
+        trigger = req["trigger_word"]
+        logger.info("Calling model with trigger_word=%s", trigger)
         logger.info("Input params: %s", req)
 
-        # Tenacity-wrapped execution
         output, elapsed = run_image_and_time(
             resolved_model_id,
             req,
             timeout_s=180.0,  # image generation can be slow
         )
 
-        logger.info(
-            "Completed trigger_word=%s in %.2fs",
-            req["trigger_word"],
-            elapsed,
-        )
+        logger.info("Completed trigger_word=%s in %.2fs", trigger, elapsed)
         logger.info("Output: %s", output)
 
-        # Basic output validation
         assert isinstance(output, str)
         assert output.startswith("http") or output.endswith(".png"), f"Unexpected output format: {output}"
 
-        results.append((req["trigger_word"], output, elapsed))
+        results.append((trigger, output, elapsed))
 
     # -----------------------------------------------------
     # Cross-run checks
     # -----------------------------------------------------
     (mode1, img1, t1), (mode2, img2, t2) = results
 
-    # Do NOT require images to differ byte-for-byte,
-    # but URLs should generally differ across adapters.
-    assert img1 != img2, "LoRA adapter switching did not produce distinct outputs (unexpected but indicates possible adapter misrouting)."
+    # Adapter outputs should generally differ
+    assert img1 != img2, "LoRA adapter switching did not produce distinct outputs"
 
-    # Latency sanity check (loose by design)
     ratio = t1 / t2 if t2 > 0 else float("inf")
     logger.info("Latency ratio (%s / %s) = %.2f", mode1, mode2, ratio)
 
