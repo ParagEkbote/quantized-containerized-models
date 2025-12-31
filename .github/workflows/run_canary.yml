@@ -1,0 +1,51 @@
+name: Post-CD Canary Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_model_id:
+        description: "Replicate model:version under test"
+        required: true
+      model_name:
+        description: "Model logical name"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  canary:
+    name: 🐦 Canary (${{ inputs.model_name }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    env:
+      MODEL_NAME: ${{ inputs.model_name }}
+      CANDIDATE_MODEL_ID: ${{ inputs.candidate_model_id }}
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: canary-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+
+      - run: make install-deps
+
+      - name: Validate inputs
+        run: |
+          echo "Candidate: ${CANDIDATE_MODEL_ID}"
+          [[ "${CANDIDATE_MODEL_ID}" == *:* ]] || exit 1
+
+      - name: Run canary tests
+        run: |
+          pytest -m canary -vv

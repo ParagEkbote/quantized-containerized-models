@@ -82,7 +82,7 @@ endif
 # 🏗️ Build & Deploy
 # --------------------------------------------------
 .PHONY: build
-build: ## Build & push Cog image
+build: ## Build & push Cog image (emits MODEL_ID=owner/model:version)
 	$(call require-cog)
 	$(call require-model-name)
 
@@ -101,15 +101,63 @@ endif
 		exit 1; \
 	fi; \
 	cd $$MODEL_DIR && \
-	VERSION=$$(cog push r8.im/$(USERNAME)/$(MODEL_NAME) | tail -n 1); \
-	echo "MODEL_ID=$(USERNAME)/$(MODEL_NAME):$$VERSION"; \
-	echo "MODEL_ID=$(USERNAME)/$(MODEL_NAME):$$VERSION" > /tmp/model_id.txt
+	{ \
+	  PUSH_OUTPUT=$$(cog push r8.im/$(USERNAME)/$(MODEL_NAME) 2>&1) || { echo "$$PUSH_OUTPUT"; exit 1; }; \
+	  echo "$$PUSH_OUTPUT"; \
+	  echo "---"; \
+	  echo "🔍 Extracting version hash..."; \
+	  VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP '(?<=sha256:)[a-f0-9]{64}' | head -n1); \
+	  if [ -z "$$VERSION" ]; then \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1 | sed 's/^sha256://'); \
+	  fi; \
+	  if [ -z "$$VERSION" ]; then \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -Eo '[a-f0-9]{64}' | head -n1); \
+	  fi; \
+	  if [ -z "$$VERSION" ]; then \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP 'r8\.im/[^:]+:[a-f0-9]{64}' | grep -oP '[a-f0-9]{64}' | head -n1); \
+	  fi; \
+	  if [ -z "$$VERSION" ]; then \
+	    echo "❌ Failed to extract version hash from cog push output"; \
+	    echo "Full output:"; \
+	    echo "$$PUSH_OUTPUT"; \
+	    exit 1; \
+	  fi; \
+	  MODEL_ID="$(USERNAME)/$(MODEL_NAME):$$VERSION"; \
+	  echo "✅ Extracted version: $$VERSION"; \
+	  echo "MODEL_ID=$$MODEL_ID"; \
+	  echo "$$MODEL_ID" > /tmp/model_id.txt; \
+	}
 
 .PHONY: deploy
-deploy: build ## Build and deploy model
-	@MODEL_ID=$$(cat /tmp/model_id.txt | cut -d= -f2); \
-	echo "🚀 Deployed $$MODEL_ID"; \
-	echo "MODEL_ID=$$MODEL_ID"
+deploy: build ## Build and deploy model (prints MODEL_ID for GitHub Actions)
+	@if [ ! -f /tmp/model_id.txt ]; then \
+		echo "❌ MODEL_ID file not found. Build may have failed."; \
+		exit 1; \
+	fi; \
+	MODEL_ID=$$(cat /tmp/model_id.txt | xargs); \
+	if [ -z "$$MODEL_ID" ]; then \
+		echo "❌ MODEL_ID is empty"; \
+		exit 1; \
+	fi; \
+	if ! echo "$$MODEL_ID" | grep -qE '^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+:[a-f0-9]{64}$$'; then \
+		echo "❌ MODEL_ID format invalid: $$MODEL_ID"; \
+		echo "   Expected format: username/model-name:version-hash"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "✅ Successfully deployed!"; \
+	echo ""; \
+	echo "MODEL_ID=$$MODEL_ID"; \
+	echo "candidate_model_id=$$MODEL_ID"; \
+	echo ""; \
+	if [ -n "$$GITHUB_OUTPUT" ]; then \
+		echo "candidate_model_id=$$MODEL_ID" >> $$GITHUB_OUTPUT; \
+		echo "📝 Written to GITHUB_OUTPUT"; \
+	fi; \
+	VERSION=$$(echo "$$MODEL_ID" | cut -d: -f2); \
+	echo "🔗 View at: https://replicate.com/$(USERNAME)/$(MODEL_NAME)/versions/$$VERSION"; \
+	echo ""
+
 
 # --------------------------------------------------
 # 🧪 Tests
@@ -151,5 +199,5 @@ cd: deploy integration canary ## Run full CD pipeline
 .PHONY: clean
 clean: ## Clean artifacts
 	@echo "🗑️  Cleaning..."
-	@rm -rf .cog .pytest_cache __pycache__
+	@rm -rf .cog .pytest_cache __pycache__ /tmp/model_id.txt
 	@echo "✅ Clean complete"

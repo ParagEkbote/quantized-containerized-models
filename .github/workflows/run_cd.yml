@@ -102,6 +102,7 @@ jobs:
           swap-storage: true
 
       - uses: actions/checkout@v5
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -124,27 +125,7 @@ jobs:
         env:
           MODEL_NAME: ${{ matrix.model }}
           REPLICATE_CLI_AUTH_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          echo "🚀 Deploying ${MODEL_NAME}…"
-
-          DEPLOY_LOG=$(make deploy)
-
-          echo "$DEPLOY_LOG"
-
-          VERSION_ID=$(echo "$DEPLOY_LOG" | grep -Eo 'sha256:[a-f0-9]{64}' | head -n1 | sed 's/^sha256://')
-
-          if [ -z "$VERSION_ID" ]; then
-            echo "❌ Failed to extract version hash from deploy output"
-            exit 1
-          fi
-
-          MODEL_ID="paragekbote/${MODEL_NAME}:${VERSION_ID}"
-
-          echo "candidate_model_id=${MODEL_ID}" >> "$GITHUB_OUTPUT"
-          echo "✅ Deployed candidate: ${MODEL_ID}"
-
+        run: make deploy
 
   # --------------------------------------------------
   # 🧪 Integration
@@ -176,61 +157,50 @@ jobs:
           key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
       - run: make install-deps
       - run: make integration
-
-  # --------------------------------------------------
-  # 🐦 Canary
-  # --------------------------------------------------
-  canary:
-    name: 🐦 Run Canary Tests (${{ matrix.model }})
-    needs: [setup, deploy, integration]
-    runs-on: ubuntu-22.04
-    timeout-minutes: 45
-
-    strategy:
-      matrix:
-        model: ${{ fromJson(needs.setup.outputs.models) }}
-      fail-fast: false
-
-    env:
-      MODEL_NAME: ${{ matrix.model }}
-      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
-      CANDIDATE_MODEL_ID: ${{ needs.deploy.outputs.candidate_model_id }}
-
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-
-      - name: Verify candidate model id
-        run: |
-          if [ -z "${CANDIDATE_MODEL_ID}" ]; then
-            echo "ERROR: CANDIDATE_MODEL_ID is not set"
-            exit 1
-          fi
-
-      - run: make install-deps
-      - run: make canary
-
   # --------------------------------------------------
   # 🎉 Summary
   # --------------------------------------------------
   summary:
-    name: Summary
+    name: 📊 Deployment Summary
     needs: [deploy, integration, canary]
     runs-on: ubuntu-22.04
     if: always()
 
     steps:
-      - run: |
+      - name: Generate Summary
+        run: |
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Model:** ${{ github.event.inputs.model_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Model:** \`${{ github.event.inputs.model_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 Deploy: ${{ needs.deploy.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🧪 Integration: ${{ needs.integration.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🐦 Canary: ${{ needs.canary.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Integration | ${{ needs.integration.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐦 Canary | ${{ needs.canary.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.deploy.outputs.candidate_model_id }}" != "" ]; then
+            echo "**Deployed Model ID:** \`${{ needs.deploy.outputs.candidate_model_id }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+
+  trigger-canary:
+    name: Trigger Canary
+    needs: deploy
+    runs-on: ubuntu-22.04
+    if: needs.deploy.result == 'success'
+
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'run_canary.yml',
+              ref: context.ref,
+              inputs: {
+                candidate_model_id: '${{ needs.deploy.outputs.candidate_model_id }}',
+                model_name: '${{ github.event.inputs.model_name }}'
+              }
+            })
