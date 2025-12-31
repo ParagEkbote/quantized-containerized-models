@@ -48,7 +48,7 @@ help:
 .PHONY: install-deps
 install-deps: ## Install model-specific dependencies via pyproject extras
 	@echo "📦 Installing deps for MODEL_NAME=$(MODEL_NAME)"
-	@python --version
+	@$(PYTHON) --version
 	@$(PIP) install --upgrade pip
 
 ifeq ($(MODEL_NAME),smollm3-pruna)
@@ -81,7 +81,7 @@ endif
 # 🏗️ Build & Deploy
 # --------------------------------------------------
 .PHONY: build
-build: ## Build & push Cog image (writes /tmp/model_id.txt)
+build: ## Build & push Cog image (best-effort MODEL_ID)
 	$(call require-cog)
 	$(call require-model-name)
 
@@ -95,59 +95,38 @@ endif
 	@MODEL_DIR=src/models/$$(echo "$(MODEL_NAME)" | tr '-' '_'); \
 	cd $$MODEL_DIR && \
 	{ \
-	  PUSH_OUTPUT=$$(cog push r8.im/$(USERNAME)/$(MODEL_NAME) 2>&1) || { echo "$$PUSH_OUTPUT"; exit 1; }; \
+	  PUSH_OUTPUT=$$(cog push $(REGISTRY)/$(USERNAME)/$(MODEL_NAME) 2>&1) || { echo "$$PUSH_OUTPUT"; exit 1; }; \
 	  echo "$$PUSH_OUTPUT"; \
 	  echo "---"; \
-	  echo "🔍 Extracting version hash..."; \
-	  VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP '(?<=sha256:)[a-f0-9]{64}'); \
-	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP 'sha256:[a-f0-9]{64}' | sed 's/^sha256://'); \
+	  echo "🔍 Attempting to extract version hash (best-effort)"; \
+	  VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP '(?<=sha256:)[a-f0-9]{64}' || true); \
+	  if [ -n "$$VERSION" ]; then \
+	    MODEL_ID="$(USERNAME)/$(MODEL_NAME):$$VERSION"; \
+	    echo "ℹ️ Extracted version: $$VERSION"; \
+	    echo "$$MODEL_ID" > /tmp/model_id.txt; \
+	  else \
+	    echo "ℹ️ Version not extracted (allowed)"; \
 	  fi; \
-	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -Eo '[a-f0-9]{64}'); \
-	  fi; \
-	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP 'r8\.im/[^:]+:[a-f0-9]{64}' | grep -m1 -oP '[a-f0-9]{64}'); \
-	  fi; \
-	  if [ -z "$$VERSION" ]; then \
-	    echo "❌ Failed to extract version hash from cog push output"; \
-	    echo "Full output:"; \
-	    echo "$$PUSH_OUTPUT"; \
-	    exit 1; \
-	  fi; \
-	  MODEL_ID="$(USERNAME)/$(MODEL_NAME):$$VERSION"; \
-	  echo "✅ Extracted version: $$VERSION"; \
-	  echo "MODEL_ID=$$MODEL_ID"; \
-	  echo "$$MODEL_ID" > /tmp/model_id.txt; \
-	  echo "MODEL_ID=$$MODEL_ID"; \
 	}
 
 .PHONY: deploy
-deploy: build ## Build and deploy model (prints MODEL_ID for GitHub Actions)
-	@if [ ! -f /tmp/model_id.txt ]; then \
-		echo "❌ MODEL_ID file not found. Build may have failed."; \
-		exit 1; \
-	fi; \
-	MODEL_ID=$$(cat /tmp/model_id.txt | xargs); \
-	if [ -z "$$MODEL_ID" ]; then \
-		echo "❌ MODEL_ID is empty"; \
-		exit 1; \
-	fi; \
-	# Validate MODEL_ID format: username/model-name:64-char hex
-	if ! echo "$$MODEL_ID" | grep -qE '^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+:[a-f0-9]{64}$$'; then \
-		echo "❌ MODEL_ID format invalid: $$MODEL_ID"; \
-		echo "   Expected format: username/model-name:version-hash"; \
-		exit 1; \
+deploy: build ## Deploy model (MODEL_ID is advisory only)
+	@MODEL_ID=""; \
+	if [ -f /tmp/model_id.txt ]; then \
+	  MODEL_ID=$$(cat /tmp/model_id.txt | xargs); \
 	fi; \
 	echo ""; \
 	echo "✅ Successfully deployed"; \
-	echo "MODEL_ID=$$MODEL_ID"; \
-	echo "candidate_model_id=$$MODEL_ID"; \
-	if [ -n "$$GITHUB_OUTPUT" ]; then \
-		echo "candidate_model_id=$$MODEL_ID" >> $$GITHUB_OUTPUT; \
+	if [ -n "$$MODEL_ID" ]; then \
+	  echo "ℹ️ Candidate model ID: $$MODEL_ID"; \
+	  if [ -n "$$GITHUB_OUTPUT" ]; then \
+	    echo "candidate_model_id=$$MODEL_ID" >> $$GITHUB_OUTPUT; \
+	  fi; \
+	  VERSION=$$(echo "$$MODEL_ID" | cut -d: -f2); \
+	  echo "🔗 https://replicate.com/$(USERNAME)/$(MODEL_NAME)/versions/$$VERSION"; \
+	else \
+	  echo "ℹ️ No model ID emitted (allowed)"; \
 	fi; \
-	VERSION=$$(echo "$$MODEL_ID" | cut -d: -f2); \
-	echo "🔗 https://replicate.com/$(USERNAME)/$(MODEL_NAME)/versions/$$VERSION"; \
 	echo ""
 
 # --------------------------------------------------

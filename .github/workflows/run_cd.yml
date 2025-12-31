@@ -9,7 +9,6 @@ on:
         type: choice
         options:
           - all
-          - smollm3-pruna
           - smollm3-3b-smashed
           - phi4-reasoning-plus-unsloth
           - flux-fast-lora-hotswap
