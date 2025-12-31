@@ -106,15 +106,15 @@ endif
 	  echo "$$PUSH_OUTPUT"; \
 	  echo "---"; \
 	  echo "🔍 Extracting version hash..."; \
-	  VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP '(?<=sha256:)[a-f0-9]{64}' | head -n1); \
+	  VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP '(?<=sha256:)[a-f0-9]{64}'); \
 	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1 | sed 's/^sha256://'); \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP 'sha256:[a-f0-9]{64}' | sed 's/^sha256://'); \
 	  fi; \
 	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -Eo '[a-f0-9]{64}' | head -n1); \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -Eo '[a-f0-9]{64}'); \
 	  fi; \
 	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP 'r8\.im/[^:]+:[a-f0-9]{64}' | grep -oP '[a-f0-9]{64}' | head -n1); \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP 'r8\.im/[^:]+:[a-f0-9]{64}' | grep -m1 -oP '[a-f0-9]{64}'); \
 	  fi; \
 	  if [ -z "$$VERSION" ]; then \
 	    echo "❌ Failed to extract version hash from cog push output"; \
@@ -139,6 +139,7 @@ deploy: build ## Build and deploy model (prints MODEL_ID for GitHub Actions)
 		echo "❌ MODEL_ID is empty"; \
 		exit 1; \
 	fi; \
+	# Validate MODEL_ID format: username/model-name:64-char hex
 	if ! echo "$$MODEL_ID" | grep -qE '^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+:[a-f0-9]{64}$$'; then \
 		echo "❌ MODEL_ID format invalid: $$MODEL_ID"; \
 		echo "   Expected format: username/model-name:version-hash"; \
