@@ -23,7 +23,7 @@ env:
   PYTHON_VERSION: "3.12"
 
 # --------------------------------------------------
-# 🎯 Resolve Model Matrix
+# 🎯 Setup (resolve model matrix)
 # --------------------------------------------------
 jobs:
   setup:
@@ -41,7 +41,7 @@ jobs:
           fi
 
   # --------------------------------------------------
-  # 🚀 Deploy (build + push only)
+  # 🚀 Deploy (authoritative)
   # --------------------------------------------------
   deploy:
     name: 🚀 Deploy (${{ matrix.model }})
@@ -92,19 +92,31 @@ jobs:
       - name: Install deps
         run: make install-deps
 
-      - name: Deploy model (best-effort version emission)
+      - name: Deploy model
         id: deploy
+        env:
+          REPLICATE_CLI_AUTH_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
         run: |
+          set -e
           make deploy || exit 1
 
+          # Best-effort metadata only
+          if [ -f /tmp/model_id.txt ]; then
+            CID=$(cat /tmp/model_id.txt | xargs)
+            echo "ℹ️ Candidate model ID: $CID"
+            echo "candidate_model_id=$CID" >> "$GITHUB_OUTPUT"
+          else
+            echo "ℹ️ No model ID emitted (allowed)"
+          fi
+
   # --------------------------------------------------
-  # 🧪 Integration (single blocking gate)
+  # 🧪 Integration (blocking gate)
   # --------------------------------------------------
   integration:
     name: 🧪 Integration (${{ matrix.model }})
-    needs: deploy
+    needs: [setup, deploy]
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     strategy:
       matrix:
@@ -128,20 +140,17 @@ jobs:
           path: ~/.cache/pip
           key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
-      - name: Install deps
-        run: make install-deps
-
-      - name: Run integration tests
-        run: make integration
+      - run: make install-deps
+      - run: make integration
 
   # --------------------------------------------------
   # 🐦 Canary (async, non-blocking)
   # --------------------------------------------------
   trigger-canary:
     name: 🐦 Trigger Canary
-    needs: deploy
+    needs: [deploy, integration]
     runs-on: ubuntu-22.04
-    if: always()
+    if: needs.integration.result == 'success'
 
     steps:
       - uses: actions/github-script@v7
@@ -159,7 +168,7 @@ jobs:
             })
 
   # --------------------------------------------------
-  # 📊 Summary
+  # 📊 Summary (observability only)
   # --------------------------------------------------
   summary:
     name: 📊 Deployment Summary
@@ -168,8 +177,7 @@ jobs:
     if: always()
 
     steps:
-      - name: Write summary
-        run: |
+      - run: |
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
@@ -177,3 +185,8 @@ jobs:
           echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Integration | ${{ needs.integration.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Canary Trigger | ${{ needs.trigger-canary.result }} |" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${{ needs.deploy.outputs.candidate_model_id }}" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Candidate Model ID:** \`${{ needs.deploy.outputs.candidate_model_id }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
