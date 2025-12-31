@@ -95,18 +95,50 @@ endif
 	@MODEL_DIR=src/models/$$(echo "$(MODEL_NAME)" | tr '-' '_'); \
 	cd $$MODEL_DIR && \
 	{ \
-	  OUT=$$(cog push $(REGISTRY)/$(USERNAME)/$(MODEL_NAME) 2>&1); \
-	  echo "$$OUT"; \
-	  HASH=$$(echo "$$OUT" | grep -oE '[a-f0-9]{64}' | head -n1); \
-	  [ -n "$$HASH" ] || { echo "❌ Failed to extract version hash"; exit 1; }; \
-	  MODEL_ID="$(USERNAME)/$(MODEL_NAME):$$HASH"; \
+	  PUSH_OUTPUT=$$(cog push r8.im/$(USERNAME)/$(MODEL_NAME) 2>&1) || { echo "$$PUSH_OUTPUT"; exit 1; }; \
+	  echo "$$PUSH_OUTPUT"; \
+	  echo "---"; \
+	  echo "🔍 Extracting version hash..."; \
+	  VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP '(?<=sha256:)[a-f0-9]{64}'); \
+	  if [ -z "$$VERSION" ]; then \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP 'sha256:[a-f0-9]{64}' | sed 's/^sha256://'); \
+	  fi; \
+	  if [ -z "$$VERSION" ]; then \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -Eo '[a-f0-9]{64}'); \
+	  fi; \
+	  if [ -z "$$VERSION" ]; then \
+	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -m1 -oP 'r8\.im/[^:]+:[a-f0-9]{64}' | grep -m1 -oP '[a-f0-9]{64}'); \
+	  fi; \
+	  if [ -z "$$VERSION" ]; then \
+	    echo "❌ Failed to extract version hash from cog push output"; \
+	    echo "Full output:"; \
+	    echo "$$PUSH_OUTPUT"; \
+	    exit 1; \
+	  fi; \
+	  MODEL_ID="$(USERNAME)/$(MODEL_NAME):$$VERSION"; \
+	  echo "✅ Extracted version: $$VERSION"; \
+	  echo "MODEL_ID=$$MODEL_ID"; \
 	  echo "$$MODEL_ID" > /tmp/model_id.txt; \
 	  echo "MODEL_ID=$$MODEL_ID"; \
 	}
 
 .PHONY: deploy
-deploy: build ## Build and deploy model
-	@MODEL_ID=$$(cat /tmp/model_id.txt); \
+deploy: build ## Build and deploy model (prints MODEL_ID for GitHub Actions)
+	@if [ ! -f /tmp/model_id.txt ]; then \
+		echo "❌ MODEL_ID file not found. Build may have failed."; \
+		exit 1; \
+	fi; \
+	MODEL_ID=$$(cat /tmp/model_id.txt | xargs); \
+	if [ -z "$$MODEL_ID" ]; then \
+		echo "❌ MODEL_ID is empty"; \
+		exit 1; \
+	fi; \
+	# Validate MODEL_ID format: username/model-name:64-char hex
+	if ! echo "$$MODEL_ID" | grep -qE '^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+:[a-f0-9]{64}$$'; then \
+		echo "❌ MODEL_ID format invalid: $$MODEL_ID"; \
+		echo "   Expected format: username/model-name:version-hash"; \
+		exit 1; \
+	fi; \
 	echo ""; \
 	echo "✅ Successfully deployed"; \
 	echo "MODEL_ID=$$MODEL_ID"; \
