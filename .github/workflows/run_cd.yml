@@ -157,38 +157,15 @@ jobs:
           key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
       - run: make install-deps
       - run: make integration
+
   # --------------------------------------------------
-  # 🎉 Summary
+  # 🐦 Trigger Canary
   # --------------------------------------------------
-  summary:
-    name: 📊 Deployment Summary
-    needs: [deploy, integration, canary]
-    runs-on: ubuntu-22.04
-    if: always()
-
-    steps:
-      - name: Generate Summary
-        run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Model:** \`${{ github.event.inputs.model_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🚀 Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🧪 Integration | ${{ needs.integration.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🐦 Canary | ${{ needs.canary.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.deploy.outputs.candidate_model_id }}" != "" ]; then
-            echo "**Deployed Model ID:** \`${{ needs.deploy.outputs.candidate_model_id }}\`" >> $GITHUB_STEP_SUMMARY
-          fi
-
-
   trigger-canary:
-    name: Trigger Canary
-    needs: deploy
+    name: 🐦 Trigger Canary
+    needs: [deploy, integration]
     runs-on: ubuntu-22.04
-    if: needs.deploy.result == 'success'
+    if: needs.deploy.result == 'success' && needs.integration.result == 'success'
 
     steps:
       - uses: actions/github-script@v7
@@ -204,3 +181,29 @@ jobs:
                 model_name: '${{ github.event.inputs.model_name }}'
               }
             })
+
+  # --------------------------------------------------
+  # 🎉 Summary
+  # --------------------------------------------------
+  summary:
+    name: 📊 Deployment Summary
+    needs: [deploy, integration, trigger-canary]
+    runs-on: ubuntu-22.04
+    if: always()
+
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Model:** \`${{ github.event.inputs.model_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Integration | ${{ needs.integration.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐦 Trigger Canary | ${{ needs.trigger-canary.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.deploy.outputs.candidate_model_id }}" != "" ]; then
+            echo "**Deployed Model ID:** \`${{ needs.deploy.outputs.candidate_model_id }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
