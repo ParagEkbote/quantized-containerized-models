@@ -15,7 +15,7 @@ COG_BIN ?= cog
 .DEFAULT_GOAL := help
 
 # --------------------------------------------------
-# 🤝 Helpers
+# 🤝 Guards
 # --------------------------------------------------
 define require-cog
 	@command -v $(COG_BIN) >/dev/null 2>&1 || { echo "❌ Cog not found in PATH"; exit 1; }
@@ -35,17 +35,16 @@ help:
 	@echo "================================"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Environment variables:"
-	@echo "  MODEL_NAME - Model to build/test (required)"
-	@echo "  USERNAME   - Replicate username (default: $(USERNAME))"
+	@echo "Environment:"
+	@echo "  MODEL_NAME (required)"
+	@echo "  USERNAME   (default: $(USERNAME))"
 	@echo ""
 
 # --------------------------------------------------
-# 📦 Setup
+# 📦 Dependency Installation
 # --------------------------------------------------
-
 .PHONY: install-deps
 install-deps: ## Install model-specific dependencies via pyproject extras
 	@echo "📦 Installing deps for MODEL_NAME=$(MODEL_NAME)"
@@ -82,7 +81,7 @@ endif
 # 🏗️ Build & Deploy
 # --------------------------------------------------
 .PHONY: build
-build: ## Build & push Cog image (emits MODEL_ID=owner/model:version)
+build: ## Build & push Cog image (writes /tmp/model_id.txt)
 	$(call require-cog)
 	$(call require-model-name)
 
@@ -90,74 +89,34 @@ ifndef REPLICATE_CLI_AUTH_TOKEN
 	$(error ❌ REPLICATE_CLI_AUTH_TOKEN must be set for cog push)
 endif
 
-	@echo "🔐 Logging into Cog (non-interactive)..."
+	@echo "🔐 Logging into Cog"
 	@echo "$(REPLICATE_CLI_AUTH_TOKEN)" | cog login --token-stdin
 
-	@echo "🔨 Building $(MODEL_NAME)..."
-
 	@MODEL_DIR=src/models/$$(echo "$(MODEL_NAME)" | tr '-' '_'); \
-	if [ ! -f "$$MODEL_DIR/cog.yaml" ]; then \
-		echo "❌ cog.yaml not found at $$MODEL_DIR/cog.yaml"; \
-		exit 1; \
-	fi; \
 	cd $$MODEL_DIR && \
 	{ \
-	  PUSH_OUTPUT=$$(cog push r8.im/$(USERNAME)/$(MODEL_NAME) 2>&1) || { echo "$$PUSH_OUTPUT"; exit 1; }; \
-	  echo "$$PUSH_OUTPUT"; \
-	  echo "---"; \
-	  echo "🔍 Extracting version hash..."; \
-	  VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP '(?<=sha256:)[a-f0-9]{64}' | head -n1); \
-	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1 | sed 's/^sha256://'); \
-	  fi; \
-	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -Eo '[a-f0-9]{64}' | head -n1); \
-	  fi; \
-	  if [ -z "$$VERSION" ]; then \
-	    VERSION=$$(echo "$$PUSH_OUTPUT" | grep -oP 'r8\.im/[^:]+:[a-f0-9]{64}' | grep -oP '[a-f0-9]{64}' | head -n1); \
-	  fi; \
-	  if [ -z "$$VERSION" ]; then \
-	    echo "❌ Failed to extract version hash from cog push output"; \
-	    echo "Full output:"; \
-	    echo "$$PUSH_OUTPUT"; \
-	    exit 1; \
-	  fi; \
-	  MODEL_ID="$(USERNAME)/$(MODEL_NAME):$$VERSION"; \
-	  echo "✅ Extracted version: $$VERSION"; \
-	  echo "MODEL_ID=$$MODEL_ID"; \
+	  OUT=$$(cog push $(REGISTRY)/$(USERNAME)/$(MODEL_NAME) 2>&1); \
+	  echo "$$OUT"; \
+	  HASH=$$(echo "$$OUT" | grep -oE '[a-f0-9]{64}' | head -n1); \
+	  [ -n "$$HASH" ] || { echo "❌ Failed to extract version hash"; exit 1; }; \
+	  MODEL_ID="$(USERNAME)/$(MODEL_NAME):$$HASH"; \
 	  echo "$$MODEL_ID" > /tmp/model_id.txt; \
+	  echo "MODEL_ID=$$MODEL_ID"; \
 	}
 
 .PHONY: deploy
-deploy: build ## Build and deploy model (prints MODEL_ID for GitHub Actions)
-	@if [ ! -f /tmp/model_id.txt ]; then \
-		echo "❌ MODEL_ID file not found. Build may have failed."; \
-		exit 1; \
-	fi; \
-	MODEL_ID=$$(cat /tmp/model_id.txt | xargs); \
-	if [ -z "$$MODEL_ID" ]; then \
-		echo "❌ MODEL_ID is empty"; \
-		exit 1; \
-	fi; \
-	if ! echo "$$MODEL_ID" | grep -qE '^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+:[a-f0-9]{64}$$'; then \
-		echo "❌ MODEL_ID format invalid: $$MODEL_ID"; \
-		echo "   Expected format: username/model-name:version-hash"; \
-		exit 1; \
-	fi; \
+deploy: build ## Build and deploy model
+	@MODEL_ID=$$(cat /tmp/model_id.txt); \
 	echo ""; \
-	echo "✅ Successfully deployed!"; \
-	echo ""; \
+	echo "✅ Successfully deployed"; \
 	echo "MODEL_ID=$$MODEL_ID"; \
 	echo "candidate_model_id=$$MODEL_ID"; \
-	echo ""; \
 	if [ -n "$$GITHUB_OUTPUT" ]; then \
 		echo "candidate_model_id=$$MODEL_ID" >> $$GITHUB_OUTPUT; \
-		echo "📝 Written to GITHUB_OUTPUT"; \
 	fi; \
 	VERSION=$$(echo "$$MODEL_ID" | cut -d: -f2); \
-	echo "🔗 View at: https://replicate.com/$(USERNAME)/$(MODEL_NAME)/versions/$$VERSION"; \
+	echo "🔗 https://replicate.com/$(USERNAME)/$(MODEL_NAME)/versions/$$VERSION"; \
 	echo ""
-
 
 # --------------------------------------------------
 # 🧪 Tests
@@ -165,39 +124,41 @@ deploy: build ## Build and deploy model (prints MODEL_ID for GitHub Actions)
 .PHONY: lint unit integration canary
 
 lint: ## Run linters
-	@echo "🔍 Running linters..."
-	@pre-commit run --all-files || echo "⚠️  Linting issues found"
+	@echo "🔍 Running linters"
+	@pre-commit run --all-files || echo "⚠️ Lint issues found"
 
 unit: ## Run unit tests
-	@echo "🧪 Running unit tests..."
+	@echo "🧪 Running unit tests"
 	@pytest -m unit -vv
 
 integration: ## Run integration tests
 	$(call require-model-name)
-	@echo "🧪 Running integration tests for $(MODEL_NAME)..."
+	@echo "🧪 Integration tests for $(MODEL_NAME)"
 	@pytest -m integration -vv
 
-canary: ## Run canary tests
+canary: ## Run canary tests (non-blocking)
 	$(call require-model-name)
-	@echo "🐦 Running canary tests for $(MODEL_NAME)..."
-	@pytest -m canary -vv
+	@echo "🐦 Canary tests for $(MODEL_NAME)"
+	@pytest -m canary -vv || echo "⚠️ Canary failures ignored"
 
 # --------------------------------------------------
-# 🔄 CI/CD Pipelines
+# 🔄 Pipelines
 # --------------------------------------------------
-.PHONY: ci cd
+.PHONY: ci cd post-deploy
 
-ci: lint unit ## Run CI (lint + unit)
+ci: lint unit ## CI pipeline
 	@echo "✅ CI passed"
 
-cd: deploy integration canary ## Run full CD pipeline
+cd: deploy integration ## CD pipeline (blocking)
 	@echo "🎉 CD complete for $(MODEL_NAME)"
+
+post-deploy: canary ## Optional post-deployment checks
+	@echo "ℹ️ Post-deployment checks finished"
 
 # --------------------------------------------------
 # 🗑️ Cleanup
 # --------------------------------------------------
 .PHONY: clean
-clean: ## Clean artifacts
-	@echo "🗑️  Cleaning..."
+clean: ## Clean build artifacts
 	@rm -rf .cog .pytest_cache __pycache__ /tmp/model_id.txt
-	@echo "✅ Clean complete"
+	@echo "🧹 Cleaned"

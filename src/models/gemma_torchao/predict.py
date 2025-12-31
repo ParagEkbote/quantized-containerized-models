@@ -34,6 +34,9 @@ def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
         raise ValueError(f"{env_var} not found in .env file or environment")
 
 
+login_with_env_token()
+
+
 # ------------------------
 # Save output utility
 # ------------------------

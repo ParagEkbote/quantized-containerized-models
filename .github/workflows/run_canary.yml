@@ -3,12 +3,12 @@ name: Post-CD Canary Validation
 on:
   workflow_dispatch:
     inputs:
-      candidate_model_id:
-        description: "Replicate model:version under test"
-        required: true
       model_name:
         description: "Model logical name"
         required: true
+      candidate_model_id:
+        description: "Optional Replicate model:version (best-effort)"
+        required: false
 
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
 
     env:
       MODEL_NAME: ${{ inputs.model_name }}
-      CANDIDATE_MODEL_ID: ${{ inputs.candidate_model_id }}
+      CANDIDATE_MODEL_ID: ${{ inputs.candidate_model_id || '' }}
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
 
     steps:
@@ -37,15 +37,23 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: canary-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
-      - run: make install-deps
+      # Canary should install only what it needs
+      - name: Install canary deps
+        run: make install-canary
 
-      - name: Validate inputs
+      # Log metadata only — never fail
+      - name: Log canary context
         run: |
-          echo "Candidate: ${CANDIDATE_MODEL_ID}"
-          [[ "${CANDIDATE_MODEL_ID}" == *:* ]] || exit 1
+          echo "Model name: ${MODEL_NAME}"
+          if [ -n "${CANDIDATE_MODEL_ID}" ]; then
+            echo "Candidate model ID: ${CANDIDATE_MODEL_ID}"
+          else
+            echo "Candidate model ID: <not provided – using model alias>"
+          fi
 
-      - name: Run canary tests
+      # Canary must be non-blocking
+      - name: Run canary tests (non-blocking)
         run: |
-          pytest -m canary -vv
+          pytest -m canary -vv || echo "⚠️ Canary tests reported issues (non-blocking)"

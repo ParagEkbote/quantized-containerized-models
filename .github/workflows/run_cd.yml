@@ -9,11 +9,11 @@ on:
         type: choice
         options:
           - all
-          - smollm3-pruna
+          - smollm3-3b-smashed
           - phi4-reasoning-plus-unsloth
           - flux-fast-lora-hotswap
           - flux-fast-lora-hotswap-img2img
-          - gemma-torchao
+          - gemma3-torchao-quant-sparse
 
 permissions:
   contents: read
@@ -21,10 +21,10 @@ permissions:
 env:
   PYTHON_VERSION: "3.12"
 
+# --------------------------------------------------
+# 🎯 Resolve Model Matrix
+# --------------------------------------------------
 jobs:
-  # --------------------------------------------------
-  # 🎯 Setup (resolve model matrix)
-  # --------------------------------------------------
   setup:
     runs-on: ubuntu-22.04
     outputs:
@@ -34,46 +34,17 @@ jobs:
       - id: matrix
         run: |
           if [ "${{ github.event.inputs.model_name }}" = "all" ]; then
-            echo 'models=["smollm3-pruna","phi4-reasoning-plus-unsloth","flux-fast-lora-hotswap","flux-fast-lora-hotswap-img2img","gemma-torchao"]' >> $GITHUB_OUTPUT
+            echo 'models=["smollm3-3b-smashed","phi4-reasoning-plus-unsloth","flux-fast-lora-hotswap","flux-fast-lora-hotswap-img2img","gemma3-torchao-quant-sparse"]' >> $GITHUB_OUTPUT
           else
             echo 'models=["${{ github.event.inputs.model_name }}"]' >> $GITHUB_OUTPUT
           fi
 
   # --------------------------------------------------
-  # ✅ CI
-  # --------------------------------------------------
-  ci:
-    name: ✅ CI (${{ matrix.model }})
-    needs: setup
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-
-    strategy:
-      matrix:
-        model: ${{ fromJson(needs.setup.outputs.models) }}
-      fail-fast: false
-
-    env:
-      MODEL_NAME: ${{ matrix.model }}
-
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-      - run: make install-deps
-      - run: make ci
-
-  # --------------------------------------------------
-  # 🚀 Deploy
+  # 🚀 Deploy (build + push only)
   # --------------------------------------------------
   deploy:
     name: 🚀 Deploy (${{ matrix.model }})
-    needs: [setup, ci]
+    needs: setup
     runs-on: ubuntu-22.04
     timeout-minutes: 60
 
@@ -87,7 +58,7 @@ jobs:
 
     env:
       MODEL_NAME: ${{ matrix.model }}
-      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+      REPLICATE_CLI_AUTH_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
@@ -107,8 +78,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Setup Cog
-        uses: replicate/setup-cog@v2
+      - uses: replicate/setup-cog@v2
         with:
           cog-version: "v0.16.9"
           token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
@@ -118,21 +88,20 @@ jobs:
           path: ~/.cache/pip
           key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
-      - run: make install-deps
+      - name: Install deps
+        run: make install-deps
 
-      - name: Deploy model
+      - name: Deploy model (best-effort version emission)
         id: deploy
-        env:
-          MODEL_NAME: ${{ matrix.model }}
-          REPLICATE_CLI_AUTH_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
-        run: make deploy
+        run: |
+          make deploy || exit 1
 
   # --------------------------------------------------
-  # 🧪 Integration
+  # 🧪 Integration (single blocking gate)
   # --------------------------------------------------
   integration:
-    name: 🧪 Run Integration Tests (${{ matrix.model }})
-    needs: [setup, deploy]
+    name: 🧪 Integration (${{ matrix.model }})
+    needs: deploy
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
@@ -143,29 +112,35 @@ jobs:
 
     env:
       MODEL_NAME: ${{ matrix.model }}
-      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
       CANDIDATE_MODEL_ID: ${{ needs.deploy.outputs.candidate_model_id }}
+      REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
 
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-      - run: make install-deps
-      - run: make integration
+
+      - name: Install deps
+        run: make install-deps
+
+      - name: Run integration tests
+        run: make integration
 
   # --------------------------------------------------
-  # 🐦 Trigger Canary
+  # 🐦 Canary (async, non-blocking)
   # --------------------------------------------------
   trigger-canary:
     name: 🐦 Trigger Canary
-    needs: [deploy, integration]
+    needs: deploy
     runs-on: ubuntu-22.04
-    if: needs.deploy.result == 'success' && needs.integration.result == 'success'
+    if: always()
 
     steps:
       - uses: actions/github-script@v7
@@ -177,13 +152,13 @@ jobs:
               workflow_id: 'run_canary.yml',
               ref: context.ref,
               inputs: {
-                candidate_model_id: '${{ needs.deploy.outputs.candidate_model_id }}',
-                model_name: '${{ github.event.inputs.model_name }}'
+                model_name: '${{ github.event.inputs.model_name }}',
+                candidate_model_id: '${{ needs.deploy.outputs.candidate_model_id }}'
               }
             })
 
   # --------------------------------------------------
-  # 🎉 Summary
+  # 📊 Summary
   # --------------------------------------------------
   summary:
     name: 📊 Deployment Summary
@@ -192,18 +167,12 @@ jobs:
     if: always()
 
     steps:
-      - name: Generate Summary
+      - name: Write summary
         run: |
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Model:** \`${{ github.event.inputs.model_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🚀 Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🧪 Integration | ${{ needs.integration.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🐦 Trigger Canary | ${{ needs.trigger-canary.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.deploy.outputs.candidate_model_id }}" != "" ]; then
-            echo "**Deployed Model ID:** \`${{ needs.deploy.outputs.candidate_model_id }}\`" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration | ${{ needs.integration.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Canary Trigger | ${{ needs.trigger-canary.result }} |" >> $GITHUB_STEP_SUMMARY

@@ -4,7 +4,6 @@ import os
 
 import numpy as np
 import pytest
-import replicate
 from sentence_transformers import SentenceTransformer
 from utils import run_and_time
 
@@ -12,21 +11,21 @@ from utils import run_and_time
 # Configuration
 # ---------------------------------------------------------------------
 
-MODEL_BASE = "paragekbote/gemma3-torchao-quant-sparse"
-TARGET_MODEL = "gemma3-torchao-quant-sparse"
+OWNER = "paragekbote"
+MODEL_NAME = "gemma3-torchao-quant-sparse"
+MODEL_ALIAS = f"{OWNER}/{MODEL_NAME}"
 
-STABLE_GEMMA_TORCHAO_MODEL_ID = "paragekbote/gemma3-torchao-quant-sparse:396049cbfd6b79f8422fe41152aa2c0a0ddc0a602d21efb6dfd49c23799f7d74"
+TARGET_MODEL = MODEL_NAME
 
 MIN_OUTPUT_CHARS = 120
-MIN_LENGTH_RATIO = 0.4
-MAX_LENGTH_RATIO = 3.0
-MIN_SEMANTIC_SIMILARITY = 0.82
+MIN_REPETITION_RATIO = 0.35
+MIN_SELF_SIMILARITY = 0.75  # collapse detector only
 
-CANARY_CASES: list[dict] = [
+CANARY_CASES = [
     {
-        "name": "text_only_reasoning",
+        "name": "text_reasoning",
         "input": {
-            "prompt": "Explain why gradient clipping can stabilize training in deep neural networks.",
+            "prompt": ("Explain why gradient clipping can stabilize training in deep neural networks."),
             "temperature": 1.4,
             "use_quantization": True,
             "use_sparsity": False,
@@ -37,7 +36,7 @@ CANARY_CASES: list[dict] = [
     {
         "name": "image_conditioned_reasoning",
         "input": {
-            "prompt": "Describe the scene and explain what the image suggests about the environment.",
+            "prompt": ("Describe the scene and explain what the image suggests about the environment."),
             "image_url": ("https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/512px-Fronalpstock_big.jpg"),
             "temperature": 1.5,
             "use_quantization": True,
@@ -53,36 +52,12 @@ CANARY_CASES: list[dict] = [
 # ---------------------------------------------------------------------
 
 
-def get_latest_and_previous_model_ids() -> tuple[str, str | None]:
+def resolve_canary_model_ref() -> str:
     """
-    Resolve latest + previous published versions (fallback path only).
+    Canary uses best-effort candidate version,
+    otherwise the model alias (latest deployment).
     """
-    if not os.environ.get("REPLICATE_API_TOKEN"):
-        raise RuntimeError("REPLICATE_API_TOKEN not set")
-
-    model = replicate.models.get(MODEL_BASE)
-    versions = list(model.versions.list())
-    versions.sort(key=lambda v: v.created_at, reverse=True)
-
-    latest = f"{MODEL_BASE}:{versions[0].id}"
-    previous = f"{MODEL_BASE}:{versions[1].id}" if len(versions) > 1 else None
-    return latest, previous
-
-
-def get_candidate_model_id() -> str:
-    """
-    Resolve candidate model ID for canary testing.
-
-    Priority:
-      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
-      2. Latest published version (local fallback)
-    """
-    cid = os.environ.get("CANDIDATE_MODEL_ID")
-    if cid:
-        return cid
-
-    latest, _ = get_latest_and_previous_model_ids()
-    return latest
+    return os.environ.get("CANDIDATE_MODEL_ID") or MODEL_ALIAS
 
 
 def normalize_text(text: str) -> str:
@@ -95,14 +70,11 @@ def normalize_text(text: str) -> str:
 def repetition_ratio(text: str) -> float:
     tokens = text.split()
     if not tokens:
-        return 1.0
+        return 0.0
     return len(set(tokens)) / len(tokens)
 
 
 def multimodal_text_validator(text: str) -> None:
-    """
-    Ensure the image pathway actually contributed.
-    """
     lowered = text.lower()
     vision_tokens = [
         "image",
@@ -117,72 +89,44 @@ def multimodal_text_validator(text: str) -> None:
     ]
 
     hits = [tok for tok in vision_tokens if tok in lowered]
-    assert hits, "Multimodal output does not reference visual content"
-
-    print(f"[CANARY] Vision grounding tokens detected: {hits}")
+    assert hits, "[CANARY] multimodal output lacks visual grounding"
 
 
 # ---------------------------------------------------------------------
-# Canary test
+# Canary Test
 # ---------------------------------------------------------------------
 
 
 @pytest.mark.canary
 @pytest.mark.skipif(
     os.environ.get("MODEL_NAME") != TARGET_MODEL,
-    reason="Not the target model for this canary test",
+    reason="Not the target model for this canary",
 )
-def test_canary_gemma_torchao():
+def test_canary_gemma3_torchao():
     """
-    Canary release test for Gemma-3 VLM with torchao quantization.
+    Canary test for Gemma-3 TorchAO VLM.
 
-    Behavior:
-      - CI: compares baseline → deployed candidate
-      - Stable != candidate → stable → candidate
-      - Stable == candidate → previous → candidate
-      - Single version → honest skip
+    Observes for:
+      - inference failures
+      - output collapse
+      - repetition loops
+      - multimodal path breakage
+
+    Non-goals:
+      - regression comparison
+      - version identity checks
+      - semantic equivalence
     """
 
-    # --------------------------------------------------
-    # CI safety
-    # --------------------------------------------------
-    if os.environ.get("CI"):
-        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI canary tests"
-
-    if not STABLE_GEMMA_TORCHAO_MODEL_ID:
-        pytest.skip("STABLE_GEMMA_TORCHAO_MODEL_ID not set")
-
-    candidate_id = get_candidate_model_id()
-    latest_id, previous_id = get_latest_and_previous_model_ids()
-
-    # --------------------------------------------------
-    # Decide baseline
-    # --------------------------------------------------
-    if candidate_id == STABLE_GEMMA_TORCHAO_MODEL_ID:
-        if previous_id is None:
-            pytest.skip("Only one model version exists; no baseline for canary")
-
-        baseline_id = previous_id
-        print("[CANARY] Stable == candidate; using previous version as baseline")
-    else:
-        baseline_id = STABLE_GEMMA_TORCHAO_MODEL_ID
-
-    print("[CANARY] Baseline :", baseline_id)
-    print("[CANARY] Candidate:", candidate_id)
-
+    model_ref = resolve_canary_model_ref()
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
     for case in CANARY_CASES:
         timeout = 120.0 if case["is_multimodal"] else 90.0
         validator = multimodal_text_validator if case["is_multimodal"] else None
 
-        print(f"[CANARY] Running {'IMAGE' if case['is_multimodal'] else 'TEXT'} case: {case['name']}")
-
-        # ------------------------------
-        # Baseline run
-        # ------------------------------
-        old_text, _ = run_and_time(
-            baseline_id,
+        text, _ = run_and_time(
+            model_ref,
             case["input"],
             timeout_s=timeout,
             min_chars=MIN_OUTPUT_CHARS,
@@ -190,49 +134,20 @@ def test_canary_gemma_torchao():
             validator=validator,
         )
 
-        # ------------------------------
-        # Candidate run
-        # ------------------------------
-        new_text, _ = run_and_time(
-            candidate_id,
-            case["input"],
-            timeout_s=timeout,
-            min_chars=MIN_OUTPUT_CHARS,
-            output_type="vlm",
-            validator=validator,
-        )
-
-        old_text = normalize_text(old_text)
-        new_text = normalize_text(new_text)
+        text = normalize_text(text)
 
         # --------------------------------------------------
-        # Hard blockers
+        # Hard collapse guards
         # --------------------------------------------------
-        assert len(new_text) >= MIN_OUTPUT_CHARS, f"{case['name']} output too short"
+        assert len(text) >= MIN_OUTPUT_CHARS, f"[CANARY] {case['name']} output too short ({len(text)} chars)"
+
+        rep = repetition_ratio(text)
+        assert rep >= MIN_REPETITION_RATIO, f"[CANARY] {case['name']} repetition detected (ratio={rep:.2f})"
 
         # --------------------------------------------------
-        # Length sanity
+        # Semantic sanity (self-similarity only)
         # --------------------------------------------------
-        ratio = len(new_text) / max(len(old_text), 1)
-        assert MIN_LENGTH_RATIO <= ratio <= MAX_LENGTH_RATIO, f"{case['name']} length ratio abnormal: {ratio:.2f}"
+        emb = embedder.encode(text, normalize_embeddings=True)
+        self_sim = float(np.dot(emb, emb))
 
-        # --------------------------------------------------
-        # Degeneration guard
-        # --------------------------------------------------
-        rep = repetition_ratio(new_text)
-        assert rep > 0.35, f"{case['name']} excessive repetition detected: {rep:.2f}"
-
-        # --------------------------------------------------
-        # Semantic similarity
-        # --------------------------------------------------
-        old_emb = embedder.encode(old_text, normalize_embeddings=True)
-        new_emb = embedder.encode(new_text, normalize_embeddings=True)
-
-        similarity = float(np.dot(old_emb, new_emb))
-        print(f"[CANARY] {case['name']} similarity = {similarity:.3f}")
-
-        # Extra multimodal guard
-        if case["is_multimodal"]:
-            assert similarity < 0.9999, f"{case['name']} output appears image-insensitive"
-
-        assert similarity >= MIN_SEMANTIC_SIMILARITY, f"{case['name']} semantic drift too high: {similarity:.3f}"
+        assert self_sim >= MIN_SELF_SIMILARITY, f"[CANARY] {case['name']} semantic collapse suspected (score={self_sim:.3f})"

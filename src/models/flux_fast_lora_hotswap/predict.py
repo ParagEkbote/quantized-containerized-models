@@ -31,6 +31,9 @@ def login_with_env_token(env_var: str = "HF_TOKEN") -> None:
         raise ValueError(f"{env_var} not found in .env file or environment")
 
 
+login_with_env_token()
+
+
 def save_image(image: Image.Image, output_dir: Path) -> Path:
     """
     Function to save the generated image.
@@ -43,7 +46,6 @@ def save_image(image: Image.Image, output_dir: Path) -> Path:
 
 class Predictor(BasePredictor):
     def setup(self):
-        login_with_env_token()
         self.pipe = DiffusionPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-dev",
             revision="3de623fc3c33e44ffbe2bad470d0f45bccf2eb21",

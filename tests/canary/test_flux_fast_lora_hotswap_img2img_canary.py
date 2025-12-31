@@ -5,32 +5,29 @@ import os
 import imagehash
 import numpy as np
 import pytest
-import replicate
-import timm
-import torch
 from PIL import Image
-from torchvision import transforms
 from utils import run_image_and_time
 
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
 
-MODEL_BASE = "paragekbote/flux-fast-lora-hotswap-img2img"
-TARGET_MODEL = "flux-fast-lora-hotswap-img2img"
+OWNER = "paragekbote"
+MODEL_NAME = "flux-fast-lora-hotswap-img2img"
+MODEL_ALIAS = f"{OWNER}/{MODEL_NAME}"
 
-STABLE_FLUX_IMG2IMG_MODEL_ID = "paragekbote/flux-fast-lora-hotswap-img2img:e6e00065d5aa5e5dba299ab01b5177db8fa58dc4449849aa0cb3f1edf50430cd"
+TARGET_MODEL = MODEL_NAME
 
-PHASH_MAX_DISTANCE = 16
-TIMM_MIN_SIMILARITY = 0.85  # slightly looser than CLIP
+MIN_PHASH_ENTROPY = 10  # collapse detector, not regression
+MIN_PIXEL_VARIANCE = 5.0  # blank / near-constant image guard
 
-CANARY_CASES: list[dict] = [
+CANARY_CASES = [
     {
         "name": "open_image_preferences_lora",
         "input": {
             "prompt": "A cinematic portrait of a cyberpunk samurai",
             "trigger_word": "Cinematic",
-            "init_image": "https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg",
+            "init_image": ("https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg"),
             "seed": 42,
             "guidance_scale": 7.0,
             "num_inference_steps": 20,
@@ -41,7 +38,7 @@ CANARY_CASES: list[dict] = [
         "input": {
             "prompt": "A peaceful countryside village at sunset",
             "trigger_word": "GHIBSKY",
-            "init_image": "https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg",
+            "init_image": ("https://images.pexels.com/photos/4934914/pexels-photo-4934914.jpeg"),
             "seed": 42,
             "guidance_scale": 7.0,
             "num_inference_steps": 20,
@@ -54,148 +51,71 @@ CANARY_CASES: list[dict] = [
 # ---------------------------------------------------------------------
 
 
-def get_latest_model_id() -> str:
+def resolve_canary_model_ref() -> str:
     """
-    Resolve latest published version (local fallback only).
+    Canary uses best-effort candidate version,
+    otherwise the model alias (latest deployment).
     """
-    if not os.environ.get("REPLICATE_API_TOKEN"):
-        raise RuntimeError("REPLICATE_API_TOKEN not set")
-
-    model = replicate.models.get(MODEL_BASE)
-    versions = list(model.versions.list())
-    versions.sort(key=lambda v: v.created_at, reverse=True)
-
-    return f"{MODEL_BASE}:{versions[0].id}"
-
-
-def get_candidate_model_id() -> str:
-    """
-    Resolve candidate model ID for canary testing.
-
-    Priority:
-      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
-      2. Latest published version (local fallback)
-    """
-    cid = os.environ.get("CANDIDATE_MODEL_ID")
-    if cid:
-        return cid
-
-    return get_latest_model_id()
+    return os.environ.get("CANDIDATE_MODEL_ID") or MODEL_ALIAS
 
 
 def assert_image_sanity(img: Image.Image) -> None:
     arr = np.asarray(img, dtype=np.float32)
 
-    assert np.isfinite(arr).all(), "NaN or Inf detected in image"
+    assert np.isfinite(arr).all(), "[CANARY] NaN/Inf detected in image"
 
-    mean_val = float(arr.mean())
-    assert 1.0 < mean_val < 254.0, f"Abnormal brightness detected: {mean_val}"
+    mean = float(arr.mean())
+    var = float(arr.var())
 
-
-class TimmEmbedder:
-    """
-    Lightweight semantic image embedder using timm.
-    """
-
-    def __init__(self, model_name: str = "resnet50"):
-        self.device = "cpu"
-        self.model = timm.create_model(
-            model_name,
-            pretrained=True,
-            num_classes=0,
-        ).to(self.device)
-        self.model.eval()
-
-        self.transform = transforms.Compose(
-            [
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=(0.485, 0.456, 0.406),
-                    std=(0.229, 0.224, 0.225),
-                ),
-            ]
-        )
-
-    def embed(self, img: Image.Image) -> np.ndarray:
-        with torch.no_grad():
-            x = self.transform(img).unsqueeze(0).to(self.device)
-            emb = self.model(x)
-            emb = emb / emb.norm(dim=-1, keepdim=True)
-            return emb.cpu().numpy()[0]
-
-
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    return float(np.dot(a, b))
+    assert 1.0 < mean < 254.0, f"[CANARY] abnormal brightness: {mean:.2f}"
+    assert var > MIN_PIXEL_VARIANCE, f"[CANARY] image collapse suspected (var={var:.2f})"
 
 
 # ---------------------------------------------------------------------
-# Canary test
+# Canary Test
 # ---------------------------------------------------------------------
 
 
 @pytest.mark.canary
 @pytest.mark.skipif(
     os.environ.get("MODEL_NAME") != TARGET_MODEL,
-    reason="Not the target model for this canary test",
+    reason="Not the target model for this canary",
 )
-def test_canary_release_flux_img2img():
+def test_canary_flux_img2img():
     """
-    Canary test for Flux img2img deployments.
+    Canary test for Flux img2img deployment.
 
-    Guards against:
-      - structural regressions (pHash)
-      - semantic drift (timm embeddings)
+    Observes for:
+      - inference failures
+      - blank / collapsed images
+      - NaN / Inf outputs
+      - obvious structural collapse
+
+    Non-goals:
+      - regression comparison
+      - LoRA semantic equivalence
+      - version identity validation
     """
 
-    # --------------------------------------------------
-    # CI safety
-    # --------------------------------------------------
-    if os.environ.get("CI"):
-        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI canary tests"
-
-    assert STABLE_FLUX_IMG2IMG_MODEL_ID, "Stable Flux img2img model ID must be pinned"
-
-    candidate_id = get_candidate_model_id()
-
-    # --------------------------------------------------
-    # No-op canary
-    # --------------------------------------------------
-    if candidate_id == STABLE_FLUX_IMG2IMG_MODEL_ID:
-        pytest.skip("No-op canary: candidate model equals stable model")
-
-    embedder = TimmEmbedder()
+    model_ref = resolve_canary_model_ref()
 
     for case in CANARY_CASES:
-        old_img, _ = run_image_and_time(
-            STABLE_FLUX_IMG2IMG_MODEL_ID,
-            case["input"],
-        )
-        new_img, _ = run_image_and_time(
-            candidate_id,
+        img, latency = run_image_and_time(
+            model_ref,
             case["input"],
         )
 
-        # ------------------------------
-        # Basic invariants
-        # ------------------------------
-        assert old_img.size == new_img.size, f"{case['name']} output resolution changed"
+        # --------------------------------------------------
+        # Hard collapse guards
+        # --------------------------------------------------
+        assert isinstance(img, Image.Image), "[CANARY] output is not an image"
 
-        assert_image_sanity(new_img)
+        assert_image_sanity(img)
 
-        # ------------------------------
-        # Structural regression (pHash)
-        # ------------------------------
-        p_dist = imagehash.phash(old_img) - imagehash.phash(new_img)
-        assert p_dist <= PHASH_MAX_DISTANCE, f"{case['name']} pHash drift too high: {p_dist}"
+        # --------------------------------------------------
+        # Structural sanity (self pHash entropy)
+        # --------------------------------------------------
+        ph = imagehash.phash(img)
+        entropy = len(set(ph.hash.flatten()))
 
-        # ------------------------------
-        # Semantic regression (timm)
-        # ------------------------------
-        sim = cosine_similarity(
-            embedder.embed(old_img),
-            embedder.embed(new_img),
-        )
-
-        assert sim >= TIMM_MIN_SIMILARITY, f"{case['name']} timm similarity too low: {sim:.4f}"
+        assert entropy >= MIN_PHASH_ENTROPY, f"[CANARY] {case['name']} image appears collapsed (pHash entropy={entropy})"

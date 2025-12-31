@@ -18,14 +18,14 @@ dependencies = [
 
 # ===== Optional Dependency Groups =====
 [project.optional-dependencies]
-smollm3 = [
+smollm3-3b-smashed= [
     "colorama",
     "IPython",
     "pyarrow<18",
     "pruna==0.2.8",
 ]
 
-unsloth = [
+phi-4-reasoning-plus-unsloth = [
     "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
     "torch==2.8.0",
     "torchvision==0.23.0",
@@ -61,7 +61,7 @@ flux-fast-lora = [
     "protobuf>=3.20.0",
 ]
 
-gemma-torchao = [
+gemma3-torchao-quant-sparse = [
     "pillow>=11.3.0",
     "transformers>=4.52.0",
     "accelerate>=1.8.0",

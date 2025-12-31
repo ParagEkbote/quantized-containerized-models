@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 
@@ -6,7 +8,7 @@ import pytest
 from integration.utils import resolve_latest_version_httpx, run_image_and_time
 
 # -----------------------------------------------------
-# Logging configuration
+# Logging
 # -----------------------------------------------------
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -18,12 +20,11 @@ MODEL_BASE_ID = "paragekbote/flux-fast-lora-hotswap-img2img"
 TARGET_MODEL = "flux-fast-lora-hotswap-img2img"
 
 # -----------------------------------------------------
-# Base input (SCHEMA-CORRECT)
+# Base input (schema-correct, deterministic)
 # -----------------------------------------------------
 BASE_INPUT = {
     "prompt": "A serene mountain landscape during sunrise.",
-    # Public image URL required by schema
-    "init_image": "https://images.pexels.com/photos/33649783/pexels-photo-33649783.jpeg",
+    "init_image": ("https://images.pexels.com/photos/33649783/pexels-photo-33649783.jpeg"),
     "seed": 42,
     "strength": 0.60,
     "guidance_scale": 7.0,
@@ -34,15 +35,20 @@ BASE_INPUT = {
 # -----------------------------------------------------
 # Helpers
 # -----------------------------------------------------
-def get_candidate_model_id() -> str:
+def resolve_candidate_model_id() -> str:
     """
     Resolve the model ID for integration testing.
 
-    Priority:
-      1. Explicit CANDIDATE_MODEL_ID (CI/CD)
-      2. Latest published version (local fallback)
+    Contract:
+      - CI: CANDIDATE_MODEL_ID MUST be provided
+      - Local: fallback to latest published version
     """
     cid = os.environ.get("CANDIDATE_MODEL_ID")
+
+    if os.environ.get("CI"):
+        assert cid, "CANDIDATE_MODEL_ID must be set in CI integration tests"
+        return cid
+
     if cid:
         return cid
 
@@ -64,46 +70,39 @@ def get_candidate_model_id() -> str:
 )
 @pytest.mark.skipif(
     "REPLICATE_API_TOKEN" not in os.environ,
-    reason="Replicate API token not found",
+    reason="REPLICATE_API_TOKEN not set",
 )
-def test_flux_fast_lora_img2img_two_adapters():
+def test_flux_fast_lora_img2img_adapter_switching():
     """
     Integration test for Flux Fast LoRA Img2Img predictor.
 
-    - Call 1: trigger_word='Anime' (open-image-preferences)
-    - Call 2: trigger_word='GHIBSKY' (flux-ghibsky)
+    Validates:
+      - Predictor boots successfully
+      - LoRA adapter switching works at runtime
+      - Outputs are valid image references
+      - Latency characteristics are sane
 
-    Verifies:
-      - LoRA adapter switching works
-      - Valid image outputs are produced
-      - Latency characteristics are reasonable
+    This test is STRICT and BLOCKING by design.
     """
 
-    # --------------------------------------------------
-    # CI safety: enforce deployment-scoped testing
-    # --------------------------------------------------
-    if os.environ.get("CI"):
-        assert os.environ.get("CANDIDATE_MODEL_ID"), "CANDIDATE_MODEL_ID must be set in CI integration tests"
-
-    resolved_model_id = get_candidate_model_id()
-    logger.info("Using model ID for integration test: %s", resolved_model_id)
+    model_id = resolve_candidate_model_id()
+    logger.info("Using model ID for integration test: %s", model_id)
 
     requests = [
         {**BASE_INPUT, "trigger_word": "Anime"},
         {**BASE_INPUT, "trigger_word": "GHIBSKY"},
     ]
 
-    results = []
+    results: list[tuple[str, str, float]] = []
 
     for req in requests:
         trigger = req["trigger_word"]
-        logger.info("Calling model with trigger_word=%s", trigger)
-        logger.info("Input params: %s", req)
+        logger.info("Invoking model with trigger_word=%s", trigger)
 
         output, elapsed = run_image_and_time(
-            resolved_model_id,
+            model_id,
             req,
-            timeout_s=180.0,  # img2img can be slow
+            timeout_s=180.0,
         )
 
         logger.info(
@@ -111,31 +110,38 @@ def test_flux_fast_lora_img2img_two_adapters():
             trigger,
             elapsed,
         )
-        logger.info("Output: %s", output)
 
-        # Output must be image URL or path
-        assert isinstance(output, str)
+        # ------------------------------
+        # Output validation (STRICT)
+        # ------------------------------
+        assert isinstance(output, str), "Model output must be a string"
         assert output.startswith("http") or output.endswith(".png"), f"Unexpected output format: {output}"
 
         results.append((trigger, output, elapsed))
 
-    # -----------------------------------------------------
-    # Cross-run checks
-    # -----------------------------------------------------
-    (mode1, img1, t1), (mode2, img2, t2) = results
+    # --------------------------------------------------
+    # Cross-call assertions
+    # --------------------------------------------------
+    (t1_name, img1, t1), (t2_name, img2, t2) = results
 
-    # Adapter switching signal (reasonable for image LoRAs)
-    assert img1 != img2, "LoRA adapter switching did not produce distinct outputs (possible adapter misrouting)"
+    # Adapter switching must produce different outputs
+    assert img1 != img2, "LoRA adapter switching failed: outputs are identical"
 
+    # Latency sanity check (coarse, not performance benchmarking)
     ratio = t1 / t2 if t2 > 0 else float("inf")
-    logger.info("Latency ratio (%s / %s) = %.2f", mode1, mode2, ratio)
+    logger.info(
+        "Latency ratio (%s / %s): %.2f",
+        t1_name,
+        t2_name,
+        ratio,
+    )
 
-    assert 0.3 < ratio < 3.0, f"Unexpected latency ratio: {ratio:.2f}"
+    assert 0.3 < ratio < 3.0, f"Unexpected latency ratio between adapters: {ratio:.2f}"
 
     logger.info(
-        "Flux Fast LoRA Img2Img test passed | %s=%.2fs %s=%.2fs",
-        mode1,
+        "Integration test passed | %s=%.2fs | %s=%.2fs",
+        t1_name,
         t1,
-        mode2,
+        t2_name,
         t2,
     )
