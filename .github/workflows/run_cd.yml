@@ -125,13 +125,26 @@ jobs:
           MODEL_NAME: ${{ matrix.model }}
           REPLICATE_CLI_AUTH_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
         run: |
-          MODEL_ID=$(make deploy | sed -n 's/^MODEL_ID=//p')
-          if [ -z "$MODEL_ID" ]; then
-            echo "ERROR: Failed to capture deployed MODEL_ID"
+          set -euo pipefail
+
+          echo "🚀 Deploying ${MODEL_NAME}…"
+
+          DEPLOY_LOG=$(make deploy)
+
+          echo "$DEPLOY_LOG"
+
+          VERSION_ID=$(echo "$DEPLOY_LOG" | grep -Eo 'sha256:[a-f0-9]{64}' | head -n1 | sed 's/^sha256://')
+
+          if [ -z "$VERSION_ID" ]; then
+            echo "❌ Failed to extract version hash from deploy output"
             exit 1
           fi
-          echo "candidate_model_id=$MODEL_ID" >> "$GITHUB_OUTPUT"
-          echo "Deployed candidate: $MODEL_ID"
+
+          MODEL_ID="paragekbote/${MODEL_NAME}:${VERSION_ID}"
+
+          echo "candidate_model_id=${MODEL_ID}" >> "$GITHUB_OUTPUT"
+          echo "✅ Deployed candidate: ${MODEL_ID}"
+
 
   # --------------------------------------------------
   # 🧪 Integration
