@@ -21,12 +21,10 @@ jobs:
     name: 🐦 Canary (${{ inputs.model_name }})
     runs-on: ubuntu-22.04
     timeout-minutes: 90
-
     env:
       MODEL_NAME: ${{ inputs.model_name }}
       CANDIDATE_MODEL_ID: ${{ inputs.candidate_model_id || '' }}
       REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
-
     steps:
       - uses: actions/checkout@v5
 
@@ -37,13 +35,11 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ matrix.model }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          key: ${{ inputs.model_name }}-${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
-      # Canary should install only what it needs
       - name: Install canary deps
         run: make install-canary
 
-      # Log metadata only — never fail
       - name: Log canary context
         run: |
           echo "Model name: ${MODEL_NAME}"
@@ -53,7 +49,5 @@ jobs:
             echo "Candidate model ID: <not provided – using model alias>"
           fi
 
-      # Canary must be non-blocking
-      - name: Run canary tests (non-blocking)
-        run: |
-          pytest -m canary -vv || echo "⚠️ Canary tests reported issues (non-blocking)"
+      - name: Run canary tests with version detection (15-30 min polling)
+        run: make canary
