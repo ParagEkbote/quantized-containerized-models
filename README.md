@@ -2,6 +2,8 @@
 
 ![alt text](docs/assets/project_hero_img.webp)
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ParagEkbote/quantized-containerized-models)
+
 **quantized-containerized-models** is a project which aims to show how modern techniques such as quantization, containerization and CI/CD work together to produce fast, lightweight and production-ready model deployments.
 
 Its core objective is to show that cutting edge AI systems can be built without sacrificing reproducibility, scalability or hardware efficiency.
